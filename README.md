@@ -56,8 +56,8 @@ steps:
 
 ## Options
 
-### `key` (optional, string)
-The key to fetch multiple from Buildkite secrets
+### `env` (optional, string)
+The secret key name to fetch multiple from Buildkite secrets.
 
 ### `variables` (optional, object)
 Specify a dictionary of `key: value` pairs to inject as environment variables, where the key is the name of the
