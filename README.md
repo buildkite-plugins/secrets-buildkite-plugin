@@ -63,8 +63,36 @@ The secret key name to fetch multiple from Buildkite secrets.
 Specify a dictionary of `key: value` pairs to inject as environment variables, where the key is the name of the
 environment variable to be set, and the value is the Buildkite Secret key.
 
+### `retry-max-attempts` (optional, number, default: 5)
+
+Maximum number of retry attempts for transient failures when fetching secrets (e.g., 5xx server errors, network issues).
+
+### `retry-base-delay` (optional, number, default: 2)
+
+Base delay in seconds for exponential backoff between retry attempts.
+
+## Retry Behavior
+
+This plugin implements automatic retry logic with exponential backoff for secret calls. This will occur for 5xx server errors or any local network issues. If a 4xx code is received, a fast failure will be served.
+
+By default, the base delay will be 2 seconds, with a maximum of 5 retries.
+
+### Example with Custom Retry
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v1.0.0:
+          env: "llamas"
+          retry-max-attempts: 10
+          retry-base-delay: 2
+```
+
 ## Testing
+
 You can run the tests using `docker-compose`:
+
 ```bash
 docker compose run --rm tests
 ```

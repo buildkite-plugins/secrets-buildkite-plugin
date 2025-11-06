@@ -7,6 +7,7 @@ setup() {
 
   export BUILDKITE_PIPELINE_SLUG=testpipe
   export BUILDKITE_PLUGIN_SECRETS_DUMP_ENV=true
+  export BUILDKITE_PLUGIN_SECRETS_RETRY_BASE_DELAY=0
 }
 
 @test "Download default env from Buildkite secrets" {
@@ -86,11 +87,60 @@ setup() {
 
     stub buildkite-agent \
         "secret get env : echo 'not found'" \
-        "secret get best : exit 1"
+        "secret get best : echo 'not found' && exit 1"
 
     run bash -c "$PWD/hooks/environment"
 
     assert_failure
     assert_output --partial "⚠️ Unable to find secret at"
+    refute_output --partial "Retrying"
+    unstub buildkite-agent
+}
+
+@test "Retry on transient failure" {
+    export TESTDATA='Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK'
+    export BUILDKITE_PLUGIN_SECRETS_RETRY_MAX_ATTEMPTS=3
+
+    stub buildkite-agent \
+        "secret get env : exit 1" \
+        "secret get env : echo ${TESTDATA}"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_success
+    assert_output --partial "FOO=bar"
+    assert_output --partial "Failed to fetch secret env (attempt 1/3)"
+    unstub buildkite-agent
+}
+
+@test "Fails after max attempts" {
+    export BUILDKITE_PLUGIN_SECRETS_VARIABLES_ANIMAL="best"
+    export BUILDKITE_PLUGIN_SECRETS_RETRY_MAX_ATTEMPTS=3
+
+    stub buildkite-agent \
+        "secret get env : echo 'not found'" \
+        "secret get best : exit 1" \
+        "secret get best : exit 1" \
+        "secret get best : exit 1"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_failure
+    assert_output --partial "Failed to fetch secret best after 3 attempts"
+    unstub buildkite-agent
+}
+
+@test "No retry on 4xx" {
+    export BUILDKITE_PLUGIN_SECRETS_VARIABLES_ANIMAL="best"
+    export BUILDKITE_PLUGIN_SECRETS_RETRY_MAX_ATTEMPTS=3
+
+    stub buildkite-agent \
+        "secret get env : echo 'not found'" \
+        "secret get best : echo 'unauthorized' && exit 1"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_failure
+    refute_output --partial "Retrying"
     unstub buildkite-agent
 }
