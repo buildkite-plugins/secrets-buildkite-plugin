@@ -18,7 +18,7 @@ A `pipeline.yml` like this will read each secret out into a ENV variable:
 steps:
   - command: echo "The content of ANIMAL is \$ANIMAL"
     plugins:
-      - secrets#v1.0.1:
+      - secrets#v1.0.2:
           variables:
             ANIMAL: llamas
             FOO: bar
@@ -50,7 +50,7 @@ job environment using a pipeline.yml like this:
 steps:
   - command: build.sh
     plugins:
-      - secrets#v1.0.1:
+      - secrets#v1.0.2:
           env: "llamas"
 ```
 
@@ -83,7 +83,7 @@ By default, the base delay will be 2 seconds, with a maximum of 5 retries.
 steps:
   - command: build.sh
     plugins:
-      - secrets#v1.0.1:
+      - secrets#v1.0.2:
           env: "llamas"
           retry-max-attempts: 10
           retry-base-delay: 2
