@@ -135,7 +135,7 @@ env_before="$(env | sort)" # used by
 
 echo "🔐 Fetching env secrets from Buildkite secrets"
 # If we are using a specific key we should download and evaluate it
-if [[ -v BUILDKITE_PLUGIN_SECRETS_ENV ]]; then
+if [[ -n "${BUILDKITE_PLUGIN_SECRETS_ENV+x}" ]]; then
     secret=$(downloadSecret "${BUILDKITE_PLUGIN_SECRETS_ENV:-env}")
     if [[ "${secret}" =~ "not found" ]]; then
         echo "No secret found at ${BUILDKITE_PLUGIN_SECRETS_ENV:-env}"
