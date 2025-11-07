@@ -12,6 +12,7 @@ setup() {
 
 @test "Download default env from Buildkite secrets" {
     export TESTDATA="Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK"
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
 
     stub buildkite-agent "secret get env : echo ${TESTDATA}"
 
@@ -37,6 +38,7 @@ setup() {
 
 @test "Download single variable from Buildkite secrets" {
     export TESTDATA='Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK'
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
     export BUILDKITE_PLUGIN_SECRETS_VARIABLES_ANIMAL="best"
 
     stub buildkite-agent \
@@ -52,6 +54,7 @@ setup() {
 
 @test "Download multiple variables from Buildkite secrets" {
     export TESTDATA='Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK'
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
     export BUILDKITE_PLUGIN_SECRETS_VARIABLES_ANIMAL="best"
     export BUILDKITE_PLUGIN_SECRETS_VARIABLES_COUNTRY="great-north"
     export BUILDKITE_PLUGIN_SECRETS_VARIABLES_FOOD="chips"
@@ -72,6 +75,7 @@ setup() {
 }
 
 @test "If no key env found in Buildkite secrets the plugin does nothing - but doesn't fail" {
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
 
     stub buildkite-agent "secret get env : echo 'not found'"
 
@@ -86,7 +90,6 @@ setup() {
     export BUILDKITE_PLUGIN_SECRETS_VARIABLES_ANIMAL="best"
 
     stub buildkite-agent \
-        "secret get env : echo 'not found'" \
         "secret get best : echo 'not found' && exit 1"
 
     run bash -c "$PWD/hooks/environment"
@@ -99,6 +102,7 @@ setup() {
 
 @test "Retry on transient failure" {
     export TESTDATA='Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK'
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
     export BUILDKITE_PLUGIN_SECRETS_RETRY_MAX_ATTEMPTS=3
 
     stub buildkite-agent \
@@ -118,7 +122,6 @@ setup() {
     export BUILDKITE_PLUGIN_SECRETS_RETRY_MAX_ATTEMPTS=3
 
     stub buildkite-agent \
-        "secret get env : echo 'not found'" \
         "secret get best : exit 1" \
         "secret get best : exit 1" \
         "secret get best : exit 1"
@@ -135,7 +138,6 @@ setup() {
     export BUILDKITE_PLUGIN_SECRETS_RETRY_MAX_ATTEMPTS=3
 
     stub buildkite-agent \
-        "secret get env : echo 'not found'" \
         "secret get best : echo 'unauthorized' && exit 1"
 
     run bash -c "$PWD/hooks/environment"
