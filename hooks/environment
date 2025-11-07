@@ -1,11 +1,66 @@
 #!/bin/bash
 set -euo pipefail
 
+calculate_backoff_delay() {
+  local BASE_DELAY="$1"
+  local ATTEMPT="$2"
+  local DELAY=$((BASE_DELAY * (2 ** (ATTEMPT - 1))))
+  local JITTER=$((RANDOM % (DELAY / 4 + 1)))
+  local TOTAL_DELAY=$((DELAY + JITTER))
+
+  if [ "$TOTAL_DELAY" -gt 60 ]; then
+    TOTAL_DELAY=60
+  fi
+
+  echo "$TOTAL_DELAY"
+}
+
+buildkite_agent_secret_get_with_retry() {
+  local KEY="$1"
+  local MAX_ATTEMPTS="${BUILDKITE_PLUGIN_SECRETS_RETRY_MAX_ATTEMPTS:-5}"
+  local BASE_DELAY="${BUILDKITE_PLUGIN_SECRETS_RETRY_BASE_DELAY:-2}"
+  local ATTEMPT=1
+  local EXIT_CODE
+  local OUTPUT
+
+  while [ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]; do
+    set +e
+    OUTPUT=$(buildkite-agent secret get "${KEY}" 2>&1)
+    EXIT_CODE=$?
+    set -e
+
+    if [ "$EXIT_CODE" -eq 0 ]; then
+      echo "$OUTPUT"
+      return 0
+    fi
+
+    if echo "$OUTPUT" | grep -qiE "(not found|unauthorized|forbidden|bad request)"; then
+      echo "$OUTPUT"
+      return "$EXIT_CODE"
+    fi
+
+    if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
+      local TOTAL_DELAY
+      TOTAL_DELAY=$(calculate_backoff_delay "$BASE_DELAY" "$ATTEMPT")
+
+      echo "Failed to fetch secret $KEY (attempt $ATTEMPT/$MAX_ATTEMPTS). Retrying in ${TOTAL_DELAY}s..." >&2
+      echo "Error: $OUTPUT" >&2
+
+      sleep "$TOTAL_DELAY"
+      ATTEMPT=$((ATTEMPT + 1))
+    else
+      echo "Failed to fetch secret $KEY after $MAX_ATTEMPTS attempts" >&2
+      echo "Error: $OUTPUT" >&2
+      return "$EXIT_CODE"
+    fi
+  done
+}
+
 # downloads the secret by provided key using the buildkite-agent secret command
 downloadSecret() {
     local key=$1
 
-    if ! secret=$(buildkite-agent secret get "${key}"); then
+    if ! secret=$(buildkite_agent_secret_get_with_retry "${key}"); then
         echo "not found ${key}"
     else
         echo "${secret}"
@@ -57,7 +112,7 @@ processVariables() {
     key="${param/BUILDKITE_PLUGIN_SECRETS_VARIABLES_/}"
     path="${!param}"
 
-    if ! value=$(buildkite-agent secret get "${path}"); then
+    if ! value=$(buildkite_agent_secret_get_with_retry "${path}"); then
         echo "⚠️ Unable to find secret at ${path}"
         exit 1
     else

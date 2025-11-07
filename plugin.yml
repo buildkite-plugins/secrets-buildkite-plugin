@@ -10,4 +10,10 @@ configuration:
       type: string
     variables:
       type: object
+    retry-max-attempts:
+      type: number
+      default: 5
+    retry-base-delay:
+      type: number
+      default: 2
 additionalProperties: false
