@@ -2,11 +2,10 @@
 
 setup_buildkite_environment() {
   if ! command_exists buildkite-agent; then
-    log_error "buildkite-agent is required for buildkite provider"
+    log_error "buildkite-agent is required"
     exit 1
   fi
 
-  log_info "Using Buildkite Secrets provider"
   check_dependencies
 }
 
@@ -54,12 +53,17 @@ buildkite_agent_secret_get_with_retry() {
 # downloads the secret by provided key using the buildkite-agent secret command
 downloadSecret() {
     local key=$1
-    local secret
+    local output
+    local status
 
-    if ! secret=$(buildkite_agent_secret_get_with_retry "${key}"); then
-        echo "not found ${key}"
+    output=$(buildkite_agent_secret_get_with_retry "${key}")
+    status=$?
+
+    if (( status != 0 )); then
+        log_warning "Failed to fetch ${key}: ${output}"
+        return 0 # Treat as non-fatal, preserving previous behavior, just improving logging
     else
-        echo "${secret}"
+        echo "${output}"
     fi
 }
 
@@ -139,7 +143,7 @@ fetch_buildkite_secrets() {
   # If we are using a specific key we should download and evaluate it
   if [[ -n "${BUILDKITE_PLUGIN_SECRETS_ENV+x}" ]]; then
       secret=$(downloadSecret "${BUILDKITE_PLUGIN_SECRETS_ENV:-env}")
-      if [[ "${secret}" =~ "not found" ]]; then
+      if [[ -z ${secret} ]] || [[ "${secret}" == *"Unable to find secret"* ]]; then
           log_warning "No secret found at ${BUILDKITE_PLUGIN_SECRETS_ENV:-env}"
       else
           processSecrets "${secret}"

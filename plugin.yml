@@ -1,9 +1,9 @@
+---
 name: Secrets
 description: "A Buildkite plugin to fetch secrets from Buildkite secrets"
 author: "@buildkite-plugins"
 requirements:
   - bash
-  - base64
   - buildkite-agent
 configuration:
   properties:

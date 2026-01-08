@@ -35,7 +35,7 @@ check_dependencies() {
     missing_deps+=("buildkite-agent")
   fi
 
-  if ! command_exists base64; then
+  if [[ -n "${BUILDKITE_PLUGIN_SECRETS_ENV:-}" ]] && ! command_exists base64; then
     missing_deps+=("base64")
   fi
 
