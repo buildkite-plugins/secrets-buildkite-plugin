@@ -3,9 +3,15 @@ description: "A Buildkite plugin to fetch secrets from Buildkite secrets"
 author: "@buildkite-plugins"
 requirements:
   - bash
+  - base64
   - buildkite-agent
 configuration:
   properties:
+    provider:
+      type: string
+      enum: ["buildkite"]
+      default: "buildkite"
+      description: "The secrets provider to use."
     env:
       type: string
     variables:
@@ -16,4 +22,4 @@ configuration:
     retry-base-delay:
       type: number
       default: 2
-additionalProperties: false
+  additionalProperties: false

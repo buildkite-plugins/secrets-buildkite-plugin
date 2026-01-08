@@ -66,3 +66,61 @@ calculate_backoff_delay() {
   echo "$TOTAL_DELAY"
 }
 
+redact_secrets() {
+  local -n secrets_array=$1
+
+  # Disable debug tracing for this function to prevent secret leaks
+  local xtrace_was_set=0
+  [[ -o xtrace ]] && xtrace_was_set=1
+  { set +x; log_info "Disabling debug tracing to prevent secret leaks" ; } 2>/dev/null
+
+  if [[ ${#secrets_array[@]} -eq 0 ]]; then
+    [[ $xtrace_was_set -eq 1 ]] && set -x
+    return 0
+    log_warning "No secrets detected to redact"
+  fi
+
+  if ! buildkite-agent redactor add --help &>/dev/null; then
+    log_warning "Your buildkite-agent version doesn't support secret redaction"
+    log_warning "Upgrade to buildkite-agent v3.67.0 or later for automatic secret redaction"
+    [[ $xtrace_was_set -eq 1 ]] && set -x
+    return 0
+  fi
+
+  log_info "Redacting ${#secrets_array[@]} secret(s)"
+
+  for secret in "${secrets_array[@]}"; do
+    if ! buildkite-agent redactor add <<< "$secret" 2>/dev/null; then
+      log_warning "Failed to redact a secret value"
+    fi
+
+    # Account for shell-escaped versions of the secret, think JWT tokens, etc.
+    local escaped
+    escaped=$(printf '%q' "$secret")
+    if [[ "$escaped" != "$secret" ]]; then
+      buildkite-agent redactor add <<< "$escaped" 2>/dev/null || true
+    fi
+
+    # Shout out to https://stackoverflow.com/questions/8571501/how-to-check-whether-a-string-is-base64-encoded-or-not for this regex
+    # We should redact decoded base64 secrets as well
+    if [[ "$secret" =~ ^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$ ]]; then
+      if ! command_exists base64; then
+        log_warning "base64 secrets found, but base64 command is not available. Only the encoded values will be redacted."
+      else
+        local decoded
+        if decoded=$(echo "$secret" | base64 -d 2>/dev/null) && [[ -n "$decoded" ]]; then
+
+          buildkite-agent redactor add <<< "$decoded" 2>/dev/null || true
+
+          local decoded_escaped
+          decoded_escaped=$(printf '%q' "$decoded")
+          if [[ "$decoded_escaped" != "$decoded" ]]; then
+            buildkite-agent redactor add <<< "$decoded_escaped" 2>/dev/null || true
+          fi
+        fi
+      fi
+    fi
+  done
+
+  [[ $xtrace_was_set -eq 1 ]] && set -x
+}
