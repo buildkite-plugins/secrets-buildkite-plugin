@@ -54,6 +54,7 @@ buildkite_agent_secret_get_with_retry() {
 # downloads the secret by provided key using the buildkite-agent secret command
 downloadSecret() {
     local key=$1
+    local secret
 
     if ! secret=$(buildkite_agent_secret_get_with_retry "${key}"); then
         echo "not found ${key}"
@@ -84,7 +85,6 @@ decodeSecrets() {
 processSecrets() {
     local encoded_secret=$1
     local envscript=''
-    local key value
 
     if ! envscript=$(decodeSecrets "${encoded_secret}"); then
         log_error "Unable to decode secrets"
@@ -104,8 +104,6 @@ processSecrets() {
 }
 
 processVariables() {
-  local param key path value
-
   # Extract the environment variable keys and Buildkite secret paths.
   for param in ${!BUILDKITE_PLUGIN_SECRETS_VARIABLES_*}; do
     key="${param/BUILDKITE_PLUGIN_SECRETS_VARIABLES_/}"
@@ -134,6 +132,7 @@ fetch_buildkite_secrets() {
   env_before="$(env | sort)"
 
   local BUILDKITE_SECRETS_TO_REDACT=()
+  local secret
 
   log_info "🔐 Fetching env secrets from Buildkite secrets"
 

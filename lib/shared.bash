@@ -2,15 +2,15 @@
 set -euo pipefail
 
 log_info() {
-  echo "[INFO]: $*"
+  echo "[INFO]: $*" >&2
 }
 
 log_success() {
-  echo "[SUCCESS]: $*"
+  echo "[SUCCESS]: $*" >&2
 }
 
 log_warning() {
-  echo "[WARNING]: $*"
+  echo "[WARNING]: $*" >&2
 }
 
 log_error() {
