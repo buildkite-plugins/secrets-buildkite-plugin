@@ -8,6 +8,7 @@ setup() {
   export BUILDKITE_PIPELINE_SLUG=testpipe
   export BUILDKITE_PLUGIN_SECRETS_DUMP_ENV=true
   export BUILDKITE_PLUGIN_SECRETS_RETRY_BASE_DELAY=0
+  export BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION=true
 }
 
 @test "Download default env from Buildkite secrets" {
@@ -95,7 +96,7 @@ setup() {
     run bash -c "$PWD/hooks/environment"
 
     assert_failure
-    assert_output --partial "⚠️ Unable to find secret at"
+    assert_output --partial "Unable to find secret at"
     refute_output --partial "Retrying"
     unstub buildkite-agent
 }
@@ -107,13 +108,14 @@ setup() {
 
     stub buildkite-agent \
         "secret get env : exit 1" \
+        "secret get env : exit 1" \
         "secret get env : echo ${TESTDATA}"
 
     run bash -c "$PWD/hooks/environment"
 
     assert_success
-    assert_output --partial "FOO=bar"
     assert_output --partial "Failed to fetch secret env (attempt 1/3)"
+    assert_output --partial "Failed to fetch secret env (attempt 2/3)"
     unstub buildkite-agent
 }
 

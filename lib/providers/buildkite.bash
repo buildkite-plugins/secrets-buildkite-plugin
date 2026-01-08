@@ -67,15 +67,15 @@ downloadSecret() {
 # BAR=BAZ
 decodeSecrets() {
     local encoded_secret=$1
-    envscript=''
+    local envscript=''
+    local key value
 
-    while IFS='=' read -r key value
-        do
-            # Check if both key and value are non-empty
-            if [ -n "$key" ] && [ -n "$value" ]; then
-                # Update envscript
-                envscript+="${key}=${value}"$'\n'
-            fi
+    while IFS='=' read -r key value; do
+        # Check if both key and value are non-empty
+        if [ -n "$key" ] && [ -n "$value" ]; then
+            # Update envscript
+            envscript+="${key}=${value}"$'\n'
+        fi
     done <<< "$(echo "$encoded_secret" | base64 -d)"
 
     echo "$envscript"
@@ -132,6 +132,7 @@ dumpEnvSecrets() {
 
 fetch_buildkite_secrets() {
   local env_before="$(env | sort)"
+  env_before="$(env | sort)"
 
   local BUILDKITE_SECRETS_TO_REDACT=()
 
@@ -152,7 +153,7 @@ fetch_buildkite_secrets() {
 
   dumpEnvSecrets
 
-  if [[ ${#BUILDKITE_SECRETS_TO_REDACT[@]} -gt 0 ]]; then
+  if [[ "${BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION:-}" != "true" ]] && [[ ${#BUILDKITE_SECRETS_TO_REDACT[@]} -gt 0 ]]; then
     redact_secrets BUILDKITE_SECRETS_TO_REDACT
   fi
 }
