@@ -74,7 +74,8 @@ redact_secrets() {
   # Disable debug tracing for this function to prevent secret leaks
   local xtrace_was_set=0
   [[ -o xtrace ]] && xtrace_was_set=1
-  { set +x; log_info "Disabling debug tracing to prevent secret leaks" ; } 2>/dev/null
+  { set +x; } 2>/dev/null
+  log_info "Disabling debug tracing to prevent secret leaks"
 
   if [[ ${#secrets_array[@]} -eq 0 ]]; then
     [[ $xtrace_was_set -eq 1 ]] && set -x
