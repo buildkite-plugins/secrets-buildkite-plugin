@@ -16,6 +16,10 @@ configuration:
       type: string
     variables:
       type: object
+    skip-redaction:
+      type: boolean
+      default: false
+      description: "If true, secrets will not be redacted in Buildkite logs."
     retry-max-attempts:
       type: number
       default: 5

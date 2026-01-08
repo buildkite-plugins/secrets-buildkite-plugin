@@ -117,6 +117,7 @@ process_variables() {
 }
 
 # primarily used for debugging; The job log will show what env vars have changed after this hook is executed
+# this will occur BEFORE redaction, so it will echo to stdout the actual secret values
 dump_env_secrets() {
   if [[ "${BUILDKITE_PLUGIN_SECRETS_DUMP_ENV:-}" =~ ^(true|1)$ ]] ; then
     echo "~~~ 🔎 Environment variables that were set" >&2;
