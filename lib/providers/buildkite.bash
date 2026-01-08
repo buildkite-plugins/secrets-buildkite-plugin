@@ -52,19 +52,15 @@ buildkite_agent_secret_get_with_retry() {
 
 # downloads the secret by provided key using the buildkite-agent secret command
 downloadSecret() {
-    local key=$1
-    local output
-    local status
+  local key=$1
+  local output
 
-    output=$(buildkite_agent_secret_get_with_retry "${key}")
-    status=$?
-
-    if (( status != 0 )); then
-        log_warning "Failed to fetch ${key}: ${output}"
-        return 0 # Treat as non-fatal, preserving previous behavior, just improving logging
-    else
-        echo "${output}"
-    fi
+  if output=$(buildkite_agent_secret_get_with_retry "${key}"); then
+    echo "${output}"
+  else
+    log_warning "Failed to fetch ${key}: ${output}"
+    return 0 # Treat as non-fatal, preserving previous behavior, just improving logging
+  fi
 }
 
 # decodes a base64 encoded secret, expects decoded secret to be in the format KEY=value:
