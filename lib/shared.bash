@@ -30,9 +30,14 @@ unknown_provider() {
 check_dependencies() {
   local missing_deps=()
 
+ # Requiring this here so we can use buildkite-agent secret redact
+  if ! command_exists buildkite-agent; then
+    missing_deps+=("buildkite-agent")
+  fi
+
   case "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}" in
     buildkite)
-      # No deps here
+      # No deps here, feels redundant checking for buildkite-agent again
       return 0
       ;;
   esac
