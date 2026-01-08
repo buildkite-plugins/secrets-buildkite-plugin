@@ -40,6 +40,9 @@ check_dependencies() {
       # No deps here, feels redundant checking for buildkite-agent again
       return 0
       ;;
+    *)
+      unknown_provider "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
+      ;;
   esac
 
   if [[ ${#missing_deps[@]} -gt 0 ]]; then
