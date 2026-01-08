@@ -35,10 +35,13 @@ check_dependencies() {
     missing_deps+=("buildkite-agent")
   fi
 
+  if ! command_exists base64; then
+    missing_deps+=("base64")
+  fi
+
   case "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}" in
     buildkite)
-      # No deps here, feels redundant checking for buildkite-agent again
-      return 0
+      # No additional deps beyond the base checks above
       ;;
     *)
       unknown_provider "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
