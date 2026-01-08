@@ -73,22 +73,23 @@ redact_secrets() {
   local secrets_array=()
   eval "secrets_array=(\"\${${secrets_array_name}[@]}\")"
 
-  # Disable debug tracing for this function to prevent secret leaks
+  # Trace redaction to debug; keep previous xtrace state
   local xtrace_was_set=0
   [[ -o xtrace ]] && xtrace_was_set=1
-  { set +x; } 2>/dev/null
-  log_info "Disabling debug tracing to prevent secret leaks"
+  # { set +x; } 2>/dev/null
+  log_info "Enabling debug tracing to inspect redaction"
+  set -x
 
   if [[ ${#secrets_array[@]} -eq 0 ]]; then
     log_warning "No secrets detected to redact"
-    [[ $xtrace_was_set -eq 1 ]] && set -x
+    [[ $xtrace_was_set -eq 1 ]] || set +x
     return 0
   fi
 
   if ! buildkite-agent redactor add --help &>/dev/null; then
     log_warning "Your buildkite-agent version doesn't support secret redaction"
     log_warning "Upgrade to buildkite-agent v3.67.0 or later for automatic secret redaction"
-    [[ $xtrace_was_set -eq 1 ]] && set -x
+    [[ $xtrace_was_set -eq 1 ]] || set +x
     return 0
   fi
 
@@ -127,5 +128,5 @@ redact_secrets() {
     fi
   done
 
-  [[ $xtrace_was_set -eq 1 ]] && set -x
+  [[ $xtrace_was_set -eq 1 ]] || set +x
 }
