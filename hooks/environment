@@ -2,11 +2,11 @@
 set -euo pipefail
 
 # Load plugin library
-# shellcheck source=lib/plugin.bash
+# shellcheck source=lib/plugin.bash disable=SC1091
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/plugin.bash"
 
 main() {
-  echo "--- :closed_lock_with_key: Setting up secrets environment"
+  echo "--- :closed_lock_with_key: Fetching secrets"
   
   log_info "Provider - ${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
 
