@@ -66,6 +66,8 @@ calculate_backoff_delay() {
   echo "$TOTAL_DELAY"
 }
 
+# This function is to be used inside providers get secrets functions
+# See the buildkite provider for an example usage
 redact_secrets() {
   local -n secrets_array=$1
 
