@@ -131,7 +131,6 @@ dumpEnvSecrets() {
 }
 
 fetch_buildkite_secrets() {
-  local env_before="$(env | sort)"
   env_before="$(env | sort)"
 
   local BUILDKITE_SECRETS_TO_REDACT=()
