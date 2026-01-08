@@ -33,10 +33,14 @@ check_dependencies() {
  # Requiring this here so we can use buildkite-agent secret redact
   if ! command_exists buildkite-agent; then
     missing_deps+=("buildkite-agent")
+    log_error "buildkite-agent command is required"
+    log_info "Please install buildkite-agent and try again."
   fi
 
   if [[ -n "${BUILDKITE_PLUGIN_SECRETS_ENV:-}" ]] && ! command_exists base64; then
     missing_deps+=("base64")
+    log_error "base64 is required when using env files"
+    log_info "Please install base64 and try again."
   fi
 
   case "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}" in
