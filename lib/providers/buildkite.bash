@@ -1,10 +1,6 @@
 #!/bin/bash
 
 setup_buildkite_environment() {
-  if ! command_exists buildkite-agent; then
-    log_error "buildkite-agent is required"
-    exit 1
-  fi
 
   check_dependencies
 }
@@ -110,7 +106,7 @@ processVariables() {
     path="${!param}"
 
     if ! value=$(buildkite_agent_secret_get_with_retry "${path}"); then
-        log_warning "Unable to find secret at ${path}"
+        log_error "Unable to find secret at ${path}"
         exit 1
     else
         # BUILDKITE_SECRETS_TO_REDACT is inherited from parent. This is not exposed to the shell.
