@@ -55,6 +55,6 @@ calculate_backoff_delay() {
     TOTAL_DELAY=60
   fi
 
-  log_info "$TOTAL_DELAY"
+  echo "$TOTAL_DELAY"
 }
 
