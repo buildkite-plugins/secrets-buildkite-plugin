@@ -69,7 +69,9 @@ calculate_backoff_delay() {
 # This function is to be used inside providers get secrets functions
 # See the buildkite provider for an example usage
 redact_secrets() {
-  local -n secrets_array=$1
+  local secrets_array_name=$1
+  local secrets_array=()
+  eval "secrets_array=(\"\${${secrets_array_name}[@]}\")"
 
   # Disable debug tracing for this function to prevent secret leaks
   local xtrace_was_set=0
@@ -78,9 +80,9 @@ redact_secrets() {
   log_info "Disabling debug tracing to prevent secret leaks"
 
   if [[ ${#secrets_array[@]} -eq 0 ]]; then
+    log_warning "No secrets detected to redact"
     [[ $xtrace_was_set -eq 1 ]] && set -x
     return 0
-    log_warning "No secrets detected to redact"
   fi
 
   if ! buildkite-agent redactor add --help &>/dev/null; then
