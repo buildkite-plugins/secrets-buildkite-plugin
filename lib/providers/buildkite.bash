@@ -47,7 +47,7 @@ buildkite_agent_secret_get_with_retry() {
 }
 
 # downloads the secret by provided key using the buildkite-agent secret command
-downloadSecret() {
+download_secret() {
   local key=$1
   local output
 
@@ -62,7 +62,7 @@ downloadSecret() {
 # decodes a base64 encoded secret, expects decoded secret to be in the format KEY=value:
 # FOO=BAR
 # BAR=BAZ
-decodeSecrets() {
+decode_secrets() {
     local encoded_secret=$1
     local envscript=''
     local key value
@@ -78,11 +78,11 @@ decodeSecrets() {
     echo "$envscript"
 }
 
-processSecrets() {
+process_secrets() {
     local encoded_secret=$1
     local envscript=''
 
-    if ! envscript=$(decodeSecrets "${encoded_secret}"); then
+    if ! envscript=$(decode_secrets "${encoded_secret}"); then
         log_error "Unable to decode secrets"
         exit 1
     fi
@@ -99,7 +99,7 @@ processSecrets() {
     set +o allexport
 }
 
-processVariables() {
+process_variables() {
   # Extract the environment variable keys and Buildkite secret paths.
   for param in ${!BUILDKITE_PLUGIN_SECRETS_VARIABLES_*}; do
     key="${param/BUILDKITE_PLUGIN_SECRETS_VARIABLES_/}"
@@ -117,7 +117,7 @@ processVariables() {
 }
 
 # primarily used for debugging; The job log will show what env vars have changed after this hook is executed
-dumpEnvSecrets() {
+dump_env_secrets() {
   if [[ "${BUILDKITE_PLUGIN_SECRETS_DUMP_ENV:-}" =~ ^(true|1)$ ]] ; then
     echo "~~~ 🔎 Environment variables that were set" >&2;
     comm -13 <(echo "$env_before") <(env | sort) || true
@@ -134,18 +134,18 @@ fetch_buildkite_secrets() {
 
   # If we are using a specific key we should download and evaluate it
   if [[ -n "${BUILDKITE_PLUGIN_SECRETS_ENV+x}" ]]; then
-      secret=$(downloadSecret "${BUILDKITE_PLUGIN_SECRETS_ENV:-env}")
-      if [[ -z ${secret} ]] || [[ "${secret}" == *"Unable to find secret"* ]]; then
+      secret=$(download_secret "${BUILDKITE_PLUGIN_SECRETS_ENV:-env}")
+      if [[ -z ${secret} ]]; then
           log_warning "No secret found at ${BUILDKITE_PLUGIN_SECRETS_ENV:-env}"
       else
-          processSecrets "${secret}"
+          process_secrets "${secret}"
       fi
   fi
 
   # Now download and set ENV specified using the `variables` plugin param
-  processVariables
+  process_variables
 
-  dumpEnvSecrets
+  dump_env_secrets
 
   if [[ "${BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION:-}" != "true" ]] && [[ ${#BUILDKITE_SECRETS_TO_REDACT[@]} -gt 0 ]]; then
     redact_secrets BUILDKITE_SECRETS_TO_REDACT
