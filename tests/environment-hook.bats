@@ -78,12 +78,12 @@ setup() {
 @test "If no key env found in Buildkite secrets the plugin does nothing - but doesn't fail" {
     export BUILDKITE_PLUGIN_SECRETS_ENV="env"
 
-    stub buildkite-agent "secret get env : echo 'not found'"
+    stub buildkite-agent "secret get env : echo 'not found' && exit 1"
 
     run bash -c "$PWD/hooks/environment"
 
     assert_success
-    assert_output --partial "No secret found"
+    assert_output --partial "Failed to fetch env"
     unstub buildkite-agent
 }
 
@@ -146,5 +146,60 @@ setup() {
 
     assert_failure
     refute_output --partial "Retrying"
+    unstub buildkite-agent
+}
+
+@test "Redact secrets when redaction is not skipped" {
+    export TESTDATA='Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK'
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+    export BUILDKITE_PLUGIN_SECRETS_VARIABLES_API_KEY="secret/api-key"
+    unset BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION
+
+    stub buildkite-agent \
+        "secret get env : echo ${TESTDATA}" \
+        "secret get secret/api-key : echo my-secret-key" \
+        "redactor add --help : echo 'usage info' && exit 0" \
+        "redactor add : cat" \
+        "redactor add : cat" \
+        "redactor add : cat" \
+        "redactor add : cat"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_success
+    assert_output --partial "Redacting"
+    assert_output --partial "secret(s)"
+    unstub buildkite-agent
+}
+
+@test "Skip redaction when BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION is true" {
+    export TESTDATA='Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK'
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+    export BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION=true
+
+    stub buildkite-agent \
+        "secret get env : echo ${TESTDATA}"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_success
+    refute_output --partial "Redacting"
+    unstub buildkite-agent
+}
+
+@test "Warn when buildkite-agent doesn't support redaction" {
+    export TESTDATA='Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK'
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+    unset BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION
+
+    stub buildkite-agent \
+        "secret get env : echo ${TESTDATA}" \
+        "redactor add --help : exit 1"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_success
+    assert_output --partial "doesn't support secret redaction"
+    assert_output --partial "Upgrade to buildkite-agent v3.67.0"
     unstub buildkite-agent
 }
