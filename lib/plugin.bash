@@ -24,7 +24,13 @@ plugin_read_config() {
 
 # Load shared utilities
 # shellcheck source=lib/shared.bash
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/shared.bash"
+SHARED_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/shared.bash"
+if [[ ! -f "${SHARED_LIB}" ]]; then
+  echo "[ERROR]: Failed to locate shared library at ${SHARED_LIB}" >&2 # Can't use log_error if shared.bash is missing
+  exit 1
+fi
+# shellcheck disable=SC1090
+source "${SHARED_LIB}"
 
 # Export default configuration values so that later functions have them even
 # when the user omits optional plugin keys
@@ -32,7 +38,13 @@ plugin_read_config
 
 # Load provider implementations
 # shellcheck source=lib/providers/buildkite.bash
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/providers/buildkite.bash"
+BUILDKITE_PROVIDER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/providers/buildkite.bash"
+if [[ ! -f "${BUILDKITE_PROVIDER}" ]]; then
+  log_error "Failed to locate provider library at ${BUILDKITE_PROVIDER}"
+  exit 1
+fi
+# shellcheck disable=SC1090
+source "${BUILDKITE_PROVIDER}"
 
 setup_provider_environment() {
   case "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}" in

@@ -2,14 +2,14 @@
 set -euo pipefail
 
 # Load plugin library
-# Resolve the absolute path to the plugin library
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# shellcheck source=lib/plugin.bash
+# shellcheck source=../lib/plugin.bash
 if [[ -f "${PLUGIN_DIR}/lib/plugin.bash" ]]; then
+  # shellcheck disable=SC1091
   source "${PLUGIN_DIR}/lib/plugin.bash"
 else
-  echo "[ERROR]: Failed to locate plugin library at ${PLUGIN_DIR}/lib/plugin.bash" >&2
+  echo "[ERROR]: Failed to locate plugin library at ${PLUGIN_DIR}/lib/plugin.bash" >&2 # Can't use log_error yet
   exit 1
 fi
 

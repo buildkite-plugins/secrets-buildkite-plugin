@@ -138,7 +138,7 @@ redact_secrets() {
       # Only attempt base64 decode on strings that:
       # 1. Are at least 4 characters (minimum valid base64)
       # 2. Contain only base64 characters
-      if [[ ${#secret} -ge 4 ]] && [[ "$secret" =~ ^[A-Za-z0-9+/]+=*$ ]]; then
+       if [[ ${#secret} -ge 4 ]] && [[ "$secret" =~ ^[A-Za-z0-9+/_-]+(={0,2})?$ ]]; then
         # Try decoding with different padding scenarios (standard, +1 pad, +2 pads)
         # This handles both padded and unpadded base64 strings
         for padding in "" "=" "=="; do
