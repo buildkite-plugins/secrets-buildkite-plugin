@@ -11,6 +11,44 @@ setup() {
   export BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION=true
 }
 
+@test "Fails when buildkite-agent is missing" {
+    local tmp
+    tmp=$(mktemp -d)
+
+    cat <<'EOF' >"$tmp/dirname"
+#!/bin/bash
+/usr/bin/dirname "$@"
+EOF
+    chmod +x "$tmp/dirname"
+
+    run env PATH="$tmp" /bin/bash -c "$PWD/hooks/environment"
+
+    assert_failure
+    assert_output --partial "buildkite-agent command is required"
+    assert_output --partial "Missing required dependencies: buildkite-agent"
+}
+
+@test "Fails when base64 is missing and env is set" {
+    local tmp
+    tmp=$(mktemp -d)
+    cat <<'EOF' >"$tmp/dirname"
+#!/bin/bash
+/usr/bin/dirname "$@"
+EOF
+    cat <<'EOF' >"$tmp/buildkite-agent"
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$tmp/buildkite-agent"
+    chmod +x "$tmp/dirname"
+
+    run env PATH="$tmp" BUILDKITE_PLUGIN_SECRETS_ENV=env /bin/bash -c "$PWD/hooks/environment"
+
+    assert_failure
+    assert_output --partial "base64 is required when using env files"
+    assert_output --partial "Missing required dependencies: base64"
+}
+
 @test "Download default env from Buildkite secrets" {
     export TESTDATA="Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK"
     export BUILDKITE_PLUGIN_SECRETS_ENV="env"
