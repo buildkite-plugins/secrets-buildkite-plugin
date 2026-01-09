@@ -134,15 +134,6 @@ process_variables() {
   done
 }
 
-# primarily used for debugging; The job log will show what env vars have changed after this hook is executed
-# this will occur BEFORE redaction, so it will echo to stdout the actual secret values
-dump_env_secrets() {
-  if [[ "${BUILDKITE_PLUGIN_SECRETS_DUMP_ENV:-}" =~ ^(true|1)$ ]] ; then
-    echo "~~~ 🔎 Environment variables that were set" >&2;
-    comm -13 <(echo "$env_before") <(env | sort) || true
-  fi
-}
-
 fetch_buildkite_secrets() {
   env_before="$(env | sort)"
 
@@ -163,8 +154,6 @@ fetch_buildkite_secrets() {
 
   # Now download and set ENV specified using the `variables` plugin param
   process_variables
-
-  dump_env_secrets
 
   if [[ "${BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION:-}" != "true" ]] && [[ ${#BUILDKITE_SECRETS_TO_REDACT[@]} -gt 0 ]]; then
     redact_secrets BUILDKITE_SECRETS_TO_REDACT
