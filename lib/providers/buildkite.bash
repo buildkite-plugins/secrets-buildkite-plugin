@@ -84,8 +84,17 @@ decode_secrets() {
     while IFS='=' read -r key value; do
         # Check if both key and value are non-empty
         if [ -n "$key" ] && [ -n "$value" ]; then
-            # Update envscript
-            envscript+="${key}=${value}"$'\n'
+            # Validate the key is a valid shell variable name
+            if [[ ! "$key" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+                log_warning "Skipping invalid variable name '${key}' in secret '${key_name}' (must start with letter or underscore)"
+                continue
+            fi
+
+            # Properly quote the value to prevent shell interpretation during eval
+            # Use printf %q to shell-escape the value safely
+            local escaped_value
+            escaped_value=$(printf '%q' "$value")
+            envscript+="${key}=${escaped_value}"$'\n'
         fi
     done <<< "$decoded_secret"
 

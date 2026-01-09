@@ -241,3 +241,20 @@ EOF
     assert_output --partial "Upgrade to buildkite-agent v3.67.0"
     unstub buildkite-agent
 }
+
+@test "Skip invalid variable names in decoded secrets" {
+    # Create secret with invalid variable name (starts with number)
+    export TESTDATA=$(echo -e "VALID=goodvalue\n0INVALID=badvalue\nALSO_VALID=anothervalue" | base64)
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+
+    stub buildkite-agent "secret get env : echo \${TESTDATA}"
+
+    run bash -c "source $PWD/hooks/environment && echo VALID=\$VALID && echo ALSO_VALID=\$ALSO_VALID"
+
+    assert_success
+    assert_output --partial "VALID=goodvalue"
+    assert_output --partial "ALSO_VALID=anothervalue"
+    assert_output --partial "Skipping invalid variable name"
+    assert_output --partial "0INVALID"
+    unstub buildkite-agent
+}
