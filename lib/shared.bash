@@ -114,6 +114,7 @@ redact_secrets() {
     fi
 
     # Shout out to https://stackoverflow.com/questions/8571501/how-to-check-whether-a-string-is-base64-encoded-or-not for this regex
+    # This will detect base64 patterns
     # We should redact decoded base64 secrets as well
     if [[ "$secret" =~ ^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$ ]]; then
       if ! command_exists base64; then

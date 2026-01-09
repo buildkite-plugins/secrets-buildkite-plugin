@@ -105,7 +105,8 @@ process_secrets() {
         exit 1
     fi
 
-    # BUILDKITE_SECRETS_TO_REDACT is inherited from parent. This is not exposed to the shell.
+    # Collect decoded secret values into the BUILDKITE_SECRETS_TO_REDACT array
+    # (defined in fetch_buildkite_secrets) for later redaction
     while IFS='=' read -r key value; do
         if [ -n "$key" ] && [ -n "$value" ]; then
             BUILDKITE_SECRETS_TO_REDACT+=("$value")
@@ -127,7 +128,8 @@ process_variables() {
         log_error "Unable to find secret at ${path}"
         exit 1
     else
-        # BUILDKITE_SECRETS_TO_REDACT is inherited from parent. This is not exposed to the shell.
+        # Collect secret values into the BUILDKITE_SECRETS_TO_REDACT array
+        # (defined in fetch_buildkite_secrets) for later redaction
         BUILDKITE_SECRETS_TO_REDACT+=("$value")
         export "${key}=${value}"
     fi
