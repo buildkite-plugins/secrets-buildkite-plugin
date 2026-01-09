@@ -128,23 +128,55 @@ redact_secrets() {
       buildkite-agent redactor add <<< "$escaped" 2>/dev/null || true
     fi
 
-    # Shout out to https://stackoverflow.com/questions/8571501/how-to-check-whether-a-string-is-base64-encoded-or-not for this regex
-    # This will detect base64 patterns. Only check secrets >= 16 chars to avoid false positives on short strings.
-    # We should redact decoded base64 secrets as well
-    if [[ ${#secret} -ge 16 ]] && [[ "$secret" =~ ^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$ ]]; then
-      if ! command_exists base64; then
-        log_warning "base64 secrets found, but base64 command is not available. Only the encoded values will be redacted."
-      else
-        local decoded
-        if decoded=$(echo "$secret" | base64 -d 2>/dev/null) && [[ -n "$decoded" ]]; then
+    # Try to decode as base64 and redact the decoded value as well.
+    # This catches secrets that are stored base64-encoded.
+    # We attempt decode on all secrets - if it's not valid base64, we skip it.
+    if command_exists base64; then
+      local decoded
+      local is_valid_base64=false
 
-          buildkite-agent redactor add <<< "$decoded" 2>/dev/null || true
+      # Only attempt base64 decode on strings that:
+      # 1. Are at least 4 characters (minimum valid base64)
+      # 2. Contain only base64 characters
+      if [[ ${#secret} -ge 4 ]] && [[ "$secret" =~ ^[A-Za-z0-9+/]+=*$ ]]; then
+        # Try decoding with different padding scenarios (standard, +1 pad, +2 pads)
+        # This handles both padded and unpadded base64 strings
+        for padding in "" "=" "=="; do
+          if decoded=$(echo "${secret}${padding}" | base64 -d 2>/dev/null) && [[ -n "$decoded" ]]; then
+            # Skip if decoded value contains non-printable/binary data
+            # This prevents false positives where random strings decode to garbage
+            if ! LC_ALL=C grep -q '[^[:print:][:space:]]' <<< "$decoded" 2>/dev/null; then
+              # Validate with round-trip: encode the decoded value and check if it matches
+              # Check both with and without trailing newline as different base64 implementations vary
+              local reencoded_with_newline reencoded_without_newline
+              reencoded_with_newline=$(echo "$decoded" | base64 2>/dev/null)
+              reencoded_without_newline=$(echo -n "$decoded" | base64 2>/dev/null)
 
-          local decoded_escaped
-          decoded_escaped=$(printf '%q' "$decoded")
-          if [[ "$decoded_escaped" != "$decoded" ]]; then
-            buildkite-agent redactor add <<< "$decoded_escaped" 2>/dev/null || true
+              # Remove any padding from reencoded values for comparison with potentially unpadded input
+              reencoded_with_newline="${reencoded_with_newline//=/}"
+              reencoded_without_newline="${reencoded_without_newline//=/}"
+              local secret_no_padding="${secret//=/}"
+
+              if [[ "$reencoded_with_newline" == "$secret_no_padding" ]] || \
+                 [[ "$reencoded_without_newline" == "$secret_no_padding" ]] || \
+                 [[ "$(echo "$decoded" | base64 2>/dev/null)" == "$secret" ]] || \
+                 [[ "$(echo -n "$decoded" | base64 2>/dev/null)" == "$secret" ]]; then
+                is_valid_base64=true
+                break
+              fi
+            fi
           fi
+        done
+      fi
+
+      # Only redact if we successfully validated it's real base64 and decoded value differs from original
+      if [[ "$is_valid_base64" == "true" ]] && [[ "$decoded" != "$secret" ]]; then
+        buildkite-agent redactor add <<< "$decoded" 2>/dev/null || true
+
+        local decoded_escaped
+        decoded_escaped=$(printf '%q' "$decoded")
+        if [[ "$decoded_escaped" != "$decoded" ]]; then
+          buildkite-agent redactor add <<< "$decoded_escaped" 2>/dev/null || true
         fi
       fi
     fi
