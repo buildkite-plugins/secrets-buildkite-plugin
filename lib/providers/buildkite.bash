@@ -78,7 +78,7 @@ decode_secrets() {
         return 0 # Treat as non-fatal, preserving previous behavior, just improving logging
 
     else
-        if [[ -z $decoded_secret ]]; then
+        if [[ -z "$decoded_secret" ]] || [[ "$decoded_secret" =~ ^[[:space:]]+$ ]]; then
             log_warning "Decoded secret for key: ${key_name} is empty"
             return 0 # Treat as non-fatal, preserving previous behavior, just improving logging
         fi
@@ -135,8 +135,6 @@ process_variables() {
 }
 
 fetch_buildkite_secrets() {
-  env_before="$(env | sort)"
-
   local BUILDKITE_SECRETS_TO_REDACT=()
   local secret
 

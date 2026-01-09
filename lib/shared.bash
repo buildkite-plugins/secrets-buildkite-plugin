@@ -30,7 +30,7 @@ unknown_provider() {
 check_dependencies() {
   local missing_deps=()
 
- # Requiring this here so we can use buildkite-agent secret redact
+  # Requiring this here so we can use buildkite-agent secret redact
   if ! command_exists buildkite-agent; then
     missing_deps+=("buildkite-agent")
     log_error "buildkite-agent command is required"
