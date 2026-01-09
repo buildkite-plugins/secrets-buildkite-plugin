@@ -77,20 +77,35 @@ calculate_backoff_delay() {
 # See the buildkite provider for an example usage
 redact_secrets() {
   local secrets_array_name=$1
+
+  # Check if redaction is explicitly disabled
+  if [[ "${BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION:-}" == "true" ]]; then
+    log_warning "Secret redaction is disabled via skip-redaction option"
+    return 0
+  fi
+
+  # We should validate the array name, to avoid command injection, low risk, but
+  # better safe than sorry
+  if [[ ! "$secrets_array_name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+    log_error "Invalid array name: $secrets_array_name"
+    return 1
+  fi
+
   local secrets_array=()
   eval "secrets_array=(\"\${${secrets_array_name}[@]}\")"
+
+  if [[ ${#secrets_array[@]} -eq 0 ]]; then
+    log_info "No secrets to redact"
+    return 0
+  fi
 
   # Disable debug tracing for this function to prevent secret leaks
   local xtrace_was_set=0
   [[ -o xtrace ]] && xtrace_was_set=1
-  { set +x; } 2>/dev/null
-  log_info "Disabling debug tracing to prevent secret leaks"
-
-  if [[ ${#secrets_array[@]} -eq 0 ]]; then
-    log_warning "No secrets detected to redact"
-    if [[ $xtrace_was_set -eq 1 ]]; then set -x; else { set +x; } 2>/dev/null; fi
-    return 0
+  if [[ $xtrace_was_set -eq 1 ]]; then
+    log_info "Disabling debug tracing to prevent secret leaks"
   fi
+  { set +x; } 2>/dev/null
 
   if ! buildkite-agent redactor add --help &>/dev/null; then
     log_warning "Your buildkite-agent version doesn't support secret redaction"
@@ -114,9 +129,9 @@ redact_secrets() {
     fi
 
     # Shout out to https://stackoverflow.com/questions/8571501/how-to-check-whether-a-string-is-base64-encoded-or-not for this regex
-    # This will detect base64 patterns
+    # This will detect base64 patterns. Only check secrets >= 16 chars to avoid false positives on short strings.
     # We should redact decoded base64 secrets as well
-    if [[ "$secret" =~ ^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$ ]]; then
+    if [[ ${#secret} -ge 16 ]] && [[ "$secret" =~ ^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$ ]]; then
       if ! command_exists base64; then
         log_warning "base64 secrets found, but base64 command is not available. Only the encoded values will be redacted."
       else

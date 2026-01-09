@@ -54,11 +54,12 @@ EOF
 
     stub buildkite-agent "secret get env : echo ${TESTDATA}"
 
-    run bash -c "$PWD/hooks/environment"
+    run bash -c "source $PWD/hooks/environment && echo FOO=\$FOO && echo BAR=\$BAR && echo SECRET=\$SECRET"
 
     assert_success
     assert_output --partial "FOO=bar"
-    refute_output --partial "blah=blah"
+    assert_output --partial "BAR=Baz"
+    assert_output --partial "SECRET=llamas"
 }
 
 @test "Download custom env from Buildkite secrets" {
@@ -67,7 +68,7 @@ EOF
 
     stub buildkite-agent "secret get llamas : echo ${TESTDATA}"
 
-    run bash -c "$PWD/hooks/environment"
+    run bash -c "source $PWD/hooks/environment && echo FOO=\$FOO"
 
     assert_success
     assert_output --partial "FOO=bar"
@@ -83,7 +84,7 @@ EOF
         "secret get env : echo ${TESTDATA}" \
         "secret get best : echo llama"
 
-    run bash -c "$PWD/hooks/environment"
+    run bash -c "source $PWD/hooks/environment && echo ANIMAL=\$ANIMAL"
 
     assert_success
     assert_output --partial "ANIMAL=llama"
@@ -103,7 +104,7 @@ EOF
         "secret get great-north : echo Canada" \
         "secret get chips : echo Poutine"
 
-    run bash -c "$PWD/hooks/environment"
+    run bash -c "source $PWD/hooks/environment && echo ANIMAL=\$ANIMAL && echo COUNTRY=\$COUNTRY && echo FOOD=\$FOOD"
 
     assert_success
     assert_output --partial "ANIMAL=llama"

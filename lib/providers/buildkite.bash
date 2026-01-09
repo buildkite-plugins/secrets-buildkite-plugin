@@ -69,18 +69,15 @@ decode_secrets() {
     local envscript=''
     local key value
 
-    # NB: This function previously did not handle errors, always resulting in a 0 exit code
-    # I don't want to cause any potential regressions, so I'm improving the logging here...
-    # but preserving the previous behavior of treating decode failures as non-fatal
-
     if ! decoded_secret=$(echo "$encoded_secret" | base64 -d 2>&1); then
-        log_warning "Failed to decode base64 secret for key: ${key_name}"
-        return 0 # Treat as non-fatal, preserving previous behavior, just improving logging
+        log_error "Failed to decode base64 secret for key: ${key_name}"
+        log_error "The secret may be malformed or not properly base64-encoded"
+        return 1
 
     else
         if [[ -z "$decoded_secret" ]] || [[ "$decoded_secret" =~ ^[[:space:]]+$ ]]; then
-            log_warning "Decoded secret for key: ${key_name} is empty"
-            return 0 # Treat as non-fatal, preserving previous behavior, just improving logging
+            log_error "Decoded secret for key: ${key_name} is empty or contains only whitespace"
+            return 1
         fi
     fi
 
@@ -106,7 +103,8 @@ process_secrets() {
     fi
 
     # Collect decoded secret values into the BUILDKITE_SECRETS_TO_REDACT array
-    # (defined in fetch_buildkite_secrets) for later redaction
+    # (defined as local in fetch_buildkite_secrets). Bash's dynamic scoping allows
+    # this function to append to the parent function's local array
     while IFS='=' read -r key value; do
         if [ -n "$key" ] && [ -n "$value" ]; then
             BUILDKITE_SECRETS_TO_REDACT+=("$value")
@@ -129,7 +127,8 @@ process_variables() {
         exit 1
     else
         # Collect secret values into the BUILDKITE_SECRETS_TO_REDACT array
-        # (defined in fetch_buildkite_secrets) for later redaction
+        # (defined as local in fetch_buildkite_secrets). Bash's dynamic scoping allows
+        # this function to append to the parent function's local array
         BUILDKITE_SECRETS_TO_REDACT+=("$value")
         export "${key}=${value}"
     fi
@@ -137,6 +136,9 @@ process_variables() {
 }
 
 fetch_buildkite_secrets() {
+  # Local array to collect secrets for redaction. Child functions (process_secrets
+  # and process_variables) can append to this array due to bash's dynamic scoping.
+  # The array is automatically cleaned up when this function exits, keeping secrets secure.
   local BUILDKITE_SECRETS_TO_REDACT=()
   local secret
 
