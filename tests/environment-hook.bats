@@ -113,14 +113,14 @@ EOF
     unstub buildkite-agent
 }
 
-@test "If no key env found in Buildkite secrets the plugin does nothing - but doesn't fail" {
+@test "If env is defined and a secret is not found in Buildkite secrets, the plugin fails" {
     export BUILDKITE_PLUGIN_SECRETS_ENV="env"
 
     stub buildkite-agent "secret get env : echo 'not found' && exit 1"
 
     run bash -c "$PWD/hooks/environment"
 
-    assert_success
+    assert_failure
     assert_output --partial "Failed to fetch env"
     unstub buildkite-agent
 }

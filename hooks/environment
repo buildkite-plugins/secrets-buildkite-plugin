@@ -2,13 +2,21 @@
 set -euo pipefail
 
 # Load plugin library
-# shellcheck source=lib/plugin.bash disable=SC1091
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/plugin.bash"
+# Resolve the absolute path to the plugin library
+PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# shellcheck source=lib/plugin.bash
+if [[ -f "${PLUGIN_DIR}/lib/plugin.bash" ]]; then
+  source "${PLUGIN_DIR}/lib/plugin.bash"
+else
+  echo "[ERROR]: Failed to locate plugin library at ${PLUGIN_DIR}/lib/plugin.bash" >&2
+  exit 1
+fi
 
 main() {
   echo "--- :closed_lock_with_key: Fetching secrets"
-  
-  log_info "Provider - ${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
+
+  log_info "Using secrets provider ${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
 
   # Setup provider environment
   setup_provider_environment

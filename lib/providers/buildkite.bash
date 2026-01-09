@@ -54,8 +54,8 @@ download_secret() {
   if output=$(buildkite_agent_secret_get_with_retry "${key}"); then
     echo "${output}"
   else
-    log_warning "Failed to fetch ${key}: ${output}"
-    return 0 # Treat as non-fatal, preserving previous behavior, just improving logging
+    log_error "Failed to fetch ${key}"
+    return 1
   fi
 }
 
@@ -142,15 +142,15 @@ fetch_buildkite_secrets() {
   local BUILDKITE_SECRETS_TO_REDACT=()
   local secret
 
-  log_info "🔐 Fetching env secrets from Buildkite secrets"
+  log_info "Fetching env secrets"
 
   # If we are using a specific key we should download and evaluate it
   if [[ -n "${BUILDKITE_PLUGIN_SECRETS_ENV+x}" ]]; then
-      secret=$(download_secret "${BUILDKITE_PLUGIN_SECRETS_ENV}")
-      if [[ -z ${secret} ]]; then
-          log_warning "No secret found at ${BUILDKITE_PLUGIN_SECRETS_ENV}"
-      else
+      if secret=$(download_secret "${BUILDKITE_PLUGIN_SECRETS_ENV}"); then
           process_secrets "${secret}" "${BUILDKITE_PLUGIN_SECRETS_ENV}"
+      else
+          log_error "No secret found at ${BUILDKITE_PLUGIN_SECRETS_ENV}"
+          return 1
       fi
   fi
 
