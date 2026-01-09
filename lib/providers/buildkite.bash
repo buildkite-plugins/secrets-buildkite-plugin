@@ -72,6 +72,12 @@ decode_secrets() {
     if ! decoded_secret=$(echo "$encoded_secret" | base64 -d 2>&1); then
         log_warning "Failed to decode base64 secret for key: ${key_name}"
         return 0
+
+    else
+        if [[ -z $decoded_secret ]]; then
+            log_warning "Decoded secret for key: ${key_name} is empty"
+            return 0
+        fi
     fi
 
     while IFS='=' read -r key value; do
