@@ -64,8 +64,15 @@ download_secret() {
 # BAR=BAZ
 decode_secrets() {
     local encoded_secret=$1
+    local key_name=$2
+    local decoded_secret
     local envscript=''
     local key value
+
+    if ! decoded_secret=$(echo "$encoded_secret" | base64 -d 2>&1); then
+        log_warning "Failed to decode base64 secret for key: ${key_name}"
+        return 0
+    fi
 
     while IFS='=' read -r key value; do
         # Check if both key and value are non-empty
@@ -73,16 +80,17 @@ decode_secrets() {
             # Update envscript
             envscript+="${key}=${value}"$'\n'
         fi
-    done <<< "$(echo "$encoded_secret" | base64 -d)"
+    done <<< "$decoded_secret"
 
     echo "$envscript"
 }
 
 process_secrets() {
     local encoded_secret=$1
+    local key_name=$2
     local envscript=''
 
-    if ! envscript=$(decode_secrets "${encoded_secret}"); then
+    if ! envscript=$(decode_secrets "${encoded_secret}" "${key_name}"); then
         log_error "Unable to decode secrets"
         exit 1
     fi
@@ -135,11 +143,11 @@ fetch_buildkite_secrets() {
 
   # If we are using a specific key we should download and evaluate it
   if [[ -n "${BUILDKITE_PLUGIN_SECRETS_ENV+x}" ]]; then
-      secret=$(download_secret "${BUILDKITE_PLUGIN_SECRETS_ENV:-env}")
+      secret=$(download_secret "${BUILDKITE_PLUGIN_SECRETS_ENV}")
       if [[ -z ${secret} ]]; then
-          log_warning "No secret found at ${BUILDKITE_PLUGIN_SECRETS_ENV:-env}"
+          log_warning "No secret found at ${BUILDKITE_PLUGIN_SECRETS_ENV}"
       else
-          process_secrets "${secret}"
+          process_secrets "${secret}" "${BUILDKITE_PLUGIN_SECRETS_ENV}"
       fi
   fi
 
