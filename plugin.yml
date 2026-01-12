@@ -1,3 +1,4 @@
+---
 name: Secrets
 description: "A Buildkite plugin to fetch secrets from Buildkite secrets"
 author: "@buildkite-plugins"
@@ -6,14 +7,23 @@ requirements:
   - buildkite-agent
 configuration:
   properties:
+    provider:
+      type: string
+      enum: ["buildkite"]
+      default: "buildkite"
+      description: "The secrets provider to use."
     env:
       type: string
     variables:
       type: object
+    skip-redaction:
+      type: boolean
+      default: false
+      description: "If true, secrets will not be redacted in Buildkite logs."
     retry-max-attempts:
       type: number
       default: 5
     retry-base-delay:
       type: number
       default: 2
-additionalProperties: false
+  additionalProperties: false
