@@ -1,34 +1,15 @@
 # Secrets Buildkite Plugin
 
-A Buildkite plugin used to fetch secrets from [Buildkite Secrets](https://buildkite.com/docs/pipelines/security/secrets/buildkite-secrets),
+A Buildkite plugin used to fetch secrets from [Buildkite Secrets](https://buildkite.com/docs/pipelines/security/secrets/buildkite-secrets).
 
 ## Changes to consider when upgrading to `v2.0.0`
 
-If you're upgrading from `v1.x.x` to `v2.0.0`, please note the potential changes to your workflow:
+If upgrading from v1.x.x, note these changes:
 
-### Log Format Changes
-Log output now uses structured prefixes (`[INFO]`, `[WARNING]`, `[ERROR]`) instead of emoji-based indicators. If you have log parsing scripts or monitoring that relies on specific log formats, you may need to update them.
-
-Before:
-```
-⚠️ Unable to find secret at my-key
-```
-
-After:
-```
-[ERROR]: Unable to find secret at my-key
-```
-
-### Removed Features
-- The `dump_env` function has been removed. This debugging feature has been removed for security reasons. If you were using `dump_env: true`, please remove it from your pipeline configuration.
-
-### New Defaults
-- Secrets are now automatically redacted from logs by default (requires buildkite-agent v3.67.0+). To opt out, set `skip-redaction: true`.
-
-### Stricter Error Handling
-- Malformed or invalid base64-encoded secrets now cause builds to fail immediately, rather than silently continuing. If you have secrets that fail to decode, you will need to fix them before upgrading to v2.0.0. This change helps catch configuration errors early rather than allowing builds to continue with missing secrets.
-
-If these changes are breaking for your use case, we recommend updating your usage to conform with the more secure `v2.0.0`.
+- **Log format**: Uses structured prefixes (`[INFO]`, `[WARNING]`, `[ERROR]`) instead of emoji
+- **Removed**: `dump_env` function removed for security
+- **New default**: Secrets auto-redacted from logs (requires agent v3.67.0+). Opt out with `skip-redaction: true`
+- **Stricter errors**: Invalid base64-encoded secrets now fail immediately
 
 ## Storing Secrets
 
@@ -46,7 +27,7 @@ A `pipeline.yml` like this will read each secret out into a ENV variable:
 steps:
   - command: echo "The content of ANIMAL is \$ANIMAL"
     plugins:
-      - secrets#v1.0.2:
+      - secrets#v2.0.0:
           variables:
             ANIMAL: llamas
             FOO: bar
@@ -78,7 +59,7 @@ job environment using a pipeline.yml like this:
 steps:
   - command: build.sh
     plugins:
-      - secrets#v1.0.2:
+      - secrets#v2.0.0:
           env: "llamas"
 ```
 
@@ -124,7 +105,7 @@ To disable automatic redaction (not recommended), set `skip-redaction: true`:
 steps:
   - command: build.sh
     plugins:
-      - secrets#v1.0.2:
+      - secrets#v2.0.0:
           env: "llamas"
           skip-redaction: true
 ```
@@ -141,7 +122,7 @@ By default, the base delay will be 2 seconds, with a maximum of 5 retries.
 steps:
   - command: build.sh
     plugins:
-      - secrets#v1.0.2:
+      - secrets#v2.0.0:
           env: "llamas"
           retry-max-attempts: 10
           retry-base-delay: 2
