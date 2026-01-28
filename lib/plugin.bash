@@ -36,20 +36,28 @@ source "${SHARED_LIB}"
 # when the user omits optional plugin keys
 plugin_read_config
 
-# Load provider implementations
-# shellcheck source=lib/providers/buildkite.bash
-BUILDKITE_PROVIDER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/providers/buildkite.bash"
-if [[ ! -f "${BUILDKITE_PROVIDER}" ]]; then
-  log_error "Failed to locate provider library at ${BUILDKITE_PROVIDER}"
-  exit 1
-fi
-# shellcheck disable=SC1090
-source "${BUILDKITE_PROVIDER}"
+# Load provider implementation dynamically based on configured provider
+load_provider() {
+  local provider="${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
+  local provider_file
+  provider_file="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/providers/${provider}.bash"
+
+  if [[ ! -f "${provider_file}" ]]; then
+    log_error "Provider '${provider}' not found at ${provider_file}"
+    exit 1
+  fi
+  # shellcheck disable=SC1090
+  source "${provider_file}"
+}
+load_provider
 
 setup_provider_environment() {
   case "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}" in
     buildkite)
       setup_buildkite_environment
+      ;;
+    gcp)
+      setup_gcp_environment
       ;;
     *)
       unknown_provider "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
@@ -61,6 +69,9 @@ fetch_secrets() {
   case "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}" in
     buildkite)
       fetch_buildkite_secrets
+      ;;
+    gcp)
+      fetch_gcp_secrets
       ;;
     *)
       unknown_provider "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"

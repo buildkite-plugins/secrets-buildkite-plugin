@@ -47,6 +47,13 @@ check_dependencies() {
     buildkite)
       # No additional deps beyond the base checks above
       ;;
+    gcp)
+      if ! command_exists gcloud; then
+        missing_deps+=("gcloud")
+        log_error "gcloud CLI is required for GCP Secret Manager"
+        log_info "Install: https://cloud.google.com/sdk/docs/install"
+      fi
+      ;;
     *)
       unknown_provider "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
       ;;

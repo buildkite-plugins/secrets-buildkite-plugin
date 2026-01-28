@@ -1,6 +1,6 @@
 ---
 name: Secrets
-description: "A Buildkite plugin to fetch secrets from Buildkite secrets"
+description: "A Buildkite plugin to fetch secrets from multiple providers"
 author: "@buildkite-plugins"
 requirements:
   - bash
@@ -9,13 +9,15 @@ configuration:
   properties:
     provider:
       type: string
-      enum: ["buildkite"]
+      enum: ["buildkite", "gcp"]
       default: "buildkite"
       description: "The secrets provider to use."
     env:
       type: string
+      description: "Secret key name for batch secrets (base64-encoded KEY=value format)"
     variables:
       type: object
+      description: "Map of ENV_VAR_NAME: secret-path for individual secrets"
     skip-redaction:
       type: boolean
       default: false
@@ -23,7 +25,17 @@ configuration:
     retry-max-attempts:
       type: number
       default: 5
+      description: "Maximum retry attempts for transient failures"
     retry-base-delay:
       type: number
       default: 2
+      description: "Base delay in seconds for exponential backoff"
+    # GCP Secret Manager options
+    gcp-project:
+      type: string
+      description: "GCP project ID (optional - falls back to CLOUDSDK_CORE_PROJECT or gcloud config)"
+    gcp-secret-version:
+      type: string
+      default: "latest"
+      description: "Secret version to fetch (default: latest)"
   additionalProperties: false
