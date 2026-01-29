@@ -32,15 +32,15 @@ gcp_secret_get_with_retry() {
   # shellcheck disable=SC2064
   trap "rm -f '$STDERR_TMP'" RETURN
 
-  # Build command with optional project flag
-  local CMD="gcloud secrets versions access ${VERSION} --secret=${SECRET_ID}"
+  # Build command as an array to avoid eval
+  local cmd=(gcloud secrets versions access "${VERSION}" --secret="${SECRET_ID}")
   if [[ -n "$PROJECT" ]]; then
-    CMD+=" --project=${PROJECT}"
+    cmd+=(--project="${PROJECT}")
   fi
 
   while [ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]; do
     set +e
-    OUTPUT=$(eval "$CMD" 2>"$STDERR_TMP")
+    OUTPUT=$("${cmd[@]}" 2>"$STDERR_TMP")
     EXIT_CODE=$?
     ERROR_OUTPUT=$(cat "$STDERR_TMP")
     set -e
@@ -86,22 +86,21 @@ download_gcp_secret() {
   fi
 }
 
-decode_gcp_secrets() {
+process_gcp_secrets() {
   local encoded_secret=$1
   local key_name=$2
   local decoded_secret
-  local envscript=''
   local key value
 
   if ! decoded_secret=$(echo "$encoded_secret" | base64 -d 2>&1); then
     log_error "Failed to decode base64 secret for key: ${key_name}"
     log_error "The secret may be malformed or not properly base64-encoded"
-    return 1
-  else
-    if [[ -z "$decoded_secret" ]] || [[ "$decoded_secret" =~ ^[[:space:]]+$ ]]; then
-      log_error "Decoded secret for key: ${key_name} is empty or contains only whitespace"
-      return 1
-    fi
+    exit 1
+  fi
+
+  if [[ -z "$decoded_secret" ]] || [[ "$decoded_secret" =~ ^[[:space:]]+$ ]]; then
+    log_error "Decoded secret for key: ${key_name} is empty or contains only whitespace"
+    exit 1
   fi
 
   while IFS='=' read -r key value; do
@@ -111,35 +110,10 @@ decode_gcp_secrets() {
         continue
       fi
 
-      local escaped_value
-      escaped_value=$(printf '%q' "$value")
-      envscript+="${key}=${escaped_value}"$'\n'
+      GCP_SECRETS_TO_REDACT+=("$value")
+      export "$key=$value"
     fi
   done <<< "$decoded_secret"
-
-  echo "$envscript"
-}
-
-process_gcp_secrets() {
-  local encoded_secret=$1
-  local key_name=$2
-  local envscript=''
-
-  if ! envscript=$(decode_gcp_secrets "${encoded_secret}" "${key_name}"); then
-    log_error "Unable to decode GCP secrets"
-    exit 1
-  fi
-
-  # Collect decoded secret values into the GCP_SECRETS_TO_REDACT array
-  while IFS='=' read -r key value; do
-    if [ -n "$key" ] && [ -n "$value" ]; then
-      GCP_SECRETS_TO_REDACT+=("$value")
-    fi
-  done <<< "$envscript"
-
-  set -o allexport
-  eval "$envscript"
-  set +o allexport
 }
 
 process_gcp_variables() {
