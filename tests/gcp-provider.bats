@@ -107,7 +107,7 @@ EOF
   export BUILDKITE_PLUGIN_SECRETS_VARIABLES_API_KEY="missing-secret"
 
   stub gcloud \
-    "secrets versions access latest --secret=missing-secret --project=test-project : echo 'NOT_FOUND: Secret not found' && exit 1"
+    "secrets versions access latest --secret=missing-secret --project=test-project : echo 'NOT_FOUND: Secret not found' >&2 && exit 1"
 
   run bash -c "$PWD/hooks/environment"
 
@@ -121,7 +121,7 @@ EOF
   export BUILDKITE_PLUGIN_SECRETS_RETRY_MAX_ATTEMPTS=3
 
   stub gcloud \
-    "secrets versions access latest --secret=missing-secret --project=test-project : echo 'NOT_FOUND: Secret not found' && exit 1"
+    "secrets versions access latest --secret=missing-secret --project=test-project : echo 'NOT_FOUND: Secret not found' >&2 && exit 1"
 
   run bash -c "$PWD/hooks/environment"
 
@@ -135,7 +135,7 @@ EOF
   export BUILDKITE_PLUGIN_SECRETS_RETRY_MAX_ATTEMPTS=3
 
   stub gcloud \
-    "secrets versions access latest --secret=forbidden-secret --project=test-project : echo 'PERMISSION_DENIED: Access denied' && exit 1"
+    "secrets versions access latest --secret=forbidden-secret --project=test-project : echo 'PERMISSION_DENIED: Access denied' >&2 && exit 1"
 
   run bash -c "$PWD/hooks/environment"
 
@@ -149,8 +149,8 @@ EOF
   export BUILDKITE_PLUGIN_SECRETS_RETRY_MAX_ATTEMPTS=3
 
   stub gcloud \
-    "secrets versions access latest --secret=flaky-secret --project=test-project : echo 'UNAVAILABLE: Service unavailable' && exit 1" \
-    "secrets versions access latest --secret=flaky-secret --project=test-project : echo 'UNAVAILABLE: Service unavailable' && exit 1" \
+    "secrets versions access latest --secret=flaky-secret --project=test-project : echo 'UNAVAILABLE: Service unavailable' >&2 && exit 1" \
+    "secrets versions access latest --secret=flaky-secret --project=test-project : echo 'UNAVAILABLE: Service unavailable' >&2 && exit 1" \
     "secrets versions access latest --secret=flaky-secret --project=test-project : echo secret-value"
 
   run bash -c "source $PWD/hooks/environment && echo API_KEY=\$API_KEY"
@@ -167,9 +167,9 @@ EOF
   export BUILDKITE_PLUGIN_SECRETS_RETRY_MAX_ATTEMPTS=3
 
   stub gcloud \
-    "secrets versions access latest --secret=always-failing --project=test-project : echo 'UNAVAILABLE' && exit 1" \
-    "secrets versions access latest --secret=always-failing --project=test-project : echo 'UNAVAILABLE' && exit 1" \
-    "secrets versions access latest --secret=always-failing --project=test-project : echo 'UNAVAILABLE' && exit 1"
+    "secrets versions access latest --secret=always-failing --project=test-project : echo 'UNAVAILABLE' >&2 && exit 1" \
+    "secrets versions access latest --secret=always-failing --project=test-project : echo 'UNAVAILABLE' >&2 && exit 1" \
+    "secrets versions access latest --secret=always-failing --project=test-project : echo 'UNAVAILABLE' >&2 && exit 1"
 
   run bash -c "$PWD/hooks/environment"
 

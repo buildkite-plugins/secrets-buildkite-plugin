@@ -25,6 +25,12 @@ gcp_secret_get_with_retry() {
   local ATTEMPT=1
   local EXIT_CODE
   local OUTPUT
+  local ERROR_OUTPUT
+  local STDERR_TMP
+
+  STDERR_TMP=$(mktemp)
+  # shellcheck disable=SC2064
+  trap "rm -f '$STDERR_TMP'" RETURN
 
   # Build command with optional project flag
   local CMD="gcloud secrets versions access ${VERSION} --secret=${SECRET_ID}"
@@ -34,8 +40,9 @@ gcp_secret_get_with_retry() {
 
   while [ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]; do
     set +e
-    OUTPUT=$(eval "$CMD" 2>&1)
+    OUTPUT=$(eval "$CMD" 2>"$STDERR_TMP")
     EXIT_CODE=$?
+    ERROR_OUTPUT=$(cat "$STDERR_TMP")
     set -e
 
     if [ "$EXIT_CODE" -eq 0 ]; then
@@ -44,8 +51,8 @@ gcp_secret_get_with_retry() {
     fi
 
     # Non-retryable errors: INVALID_ARGUMENT, UNAUTHENTICATED, PERMISSION_DENIED, NOT_FOUND
-    if echo "$OUTPUT" | grep -qiE "(INVALID_ARGUMENT|UNAUTHENTICATED|PERMISSION_DENIED|NOT_FOUND|400|401|403|404)"; then
-      echo "$OUTPUT"
+    if echo "$ERROR_OUTPUT" | grep -qiE "(INVALID_ARGUMENT|UNAUTHENTICATED|PERMISSION_DENIED|NOT_FOUND|400|401|403|404)"; then
+      echo "$ERROR_OUTPUT"
       return "$EXIT_CODE"
     fi
 
@@ -55,13 +62,13 @@ gcp_secret_get_with_retry() {
       TOTAL_DELAY=$(calculate_backoff_delay "$BASE_DELAY" "$ATTEMPT")
 
       log_info "Failed to fetch GCP secret $SECRET_ID (attempt $ATTEMPT/$MAX_ATTEMPTS). Retrying in ${TOTAL_DELAY}s..."
-      echo "Error: $OUTPUT" >&2
+      echo "Error: $ERROR_OUTPUT" >&2
 
       sleep "$TOTAL_DELAY"
       ATTEMPT=$((ATTEMPT + 1))
     else
       log_error "Failed to fetch GCP secret $SECRET_ID after $MAX_ATTEMPTS attempts"
-      echo "Error: $OUTPUT" >&2
+      echo "Error: $ERROR_OUTPUT" >&2
       return "$EXIT_CODE"
     fi
   done
