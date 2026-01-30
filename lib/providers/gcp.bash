@@ -18,6 +18,13 @@ setup_gcp_environment() {
 
 gcp_secret_get_with_retry() {
   local SECRET_ID="$1"
+
+  # Validate SECRET_ID: GCP secret names allow only letters, numbers, hyphens, underscores
+  if [[ ! "$SECRET_ID" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]]; then
+    log_error "Invalid GCP secret ID: '${SECRET_ID}'. Must contain only letters, numbers, hyphens, and underscores, and start with a letter or number."
+    return 1
+  fi
+
   local VERSION="${BUILDKITE_PLUGIN_SECRETS_GCP_SECRET_VERSION:-latest}"
   local PROJECT="${BUILDKITE_PLUGIN_SECRETS_GCP_PROJECT:-${CLOUDSDK_CORE_PROJECT:-}}"
   local MAX_ATTEMPTS="${BUILDKITE_PLUGIN_SECRETS_RETRY_MAX_ATTEMPTS:-5}"
@@ -135,6 +142,11 @@ fetch_gcp_secrets() {
   local GCP_SECRETS_TO_REDACT=()
   local secret
 
+  # Disable debug tracing to prevent secret values from leaking to logs
+  local xtrace_was_set=0
+  [[ -o xtrace ]] && xtrace_was_set=1
+  { set +x; } 2>/dev/null
+
   log_info "Fetching secrets from GCP Secret Manager"
 
   # If we are using a specific key we should download and evaluate it
@@ -143,12 +155,16 @@ fetch_gcp_secrets() {
       process_gcp_secrets "${secret}" "${BUILDKITE_PLUGIN_SECRETS_ENV}"
     else
       log_error "No secret found at ${BUILDKITE_PLUGIN_SECRETS_ENV}"
+      if [[ $xtrace_was_set -eq 1 ]]; then set -x; else { set +x; } 2>/dev/null; fi
       return 1
     fi
   fi
 
   # Now download and set ENV specified using the `variables` plugin param
   process_gcp_variables
+
+  # Restore xtrace state before redaction (redact_secrets has its own xtrace protection)
+  if [[ $xtrace_was_set -eq 1 ]]; then set -x; else { set +x; } 2>/dev/null; fi
 
   if [[ "${BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION:-}" != "true" ]] && [[ ${#GCP_SECRETS_TO_REDACT[@]} -gt 0 ]]; then
     redact_secrets GCP_SECRETS_TO_REDACT
