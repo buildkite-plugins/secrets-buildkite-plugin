@@ -1,6 +1,6 @@
 # Secrets Buildkite Plugin
 
-A Buildkite plugin used to fetch secrets from [Buildkite Secrets](https://buildkite.com/docs/pipelines/security/secrets/buildkite-secrets).
+A Buildkite plugin used to fetch secrets from [Buildkite Secrets](https://buildkite.com/docs/pipelines/security/secrets/buildkite-secrets) or [Azure Key Vault](https://azure.microsoft.com/en-us/products/key-vault).
 
 ## Changes to consider when upgrading to `v2.0.0`
 
@@ -11,17 +11,17 @@ If upgrading from v1.x.x, note these changes:
 - **New default**: Secrets auto-redacted from logs (requires agent v3.67.0+). Opt out with `skip-redaction: true`
 - **Stricter errors**: Invalid base64-encoded secrets now fail immediately
 
-## Storing Secrets
+## Buildkite Secrets Provider (Default)
 
-There are two options for storing and fetching secrets.
+The default provider fetches secrets from [Buildkite Secrets](https://buildkite.com/docs/pipelines/security/secrets/buildkite-secrets).
 
 You can create a secret in your Buildkite cluster(s) from the Buildkite UI following the instructions in the documentation [here](https://buildkite.com/docs/pipelines/security/secrets/buildkite-secrets#create-a-secret-using-the-buildkite-interface).
 
-### One at a time
+### Individual Variables
 
 Create a Buildkite secret for each variable that you need to store. Paste the value of the secret into buildkite.com directly.
 
-A `pipeline.yml` like this will read each secret out into a ENV variable:
+A `pipeline.yml` like this will read each secret out into an environment variable:
 
 ```yml
 steps:
@@ -33,7 +33,7 @@ steps:
             FOO: bar
 ```
 
-### Multiple
+### Batch Secrets (Base64)
 
 Create a single Buildkite secret with one variable per line, encoded as base64 for storage.
 
@@ -63,18 +63,130 @@ steps:
           env: "llamas"
 ```
 
+## Azure Key Vault Provider
+
+Use `provider: azure` to fetch secrets from [Azure Key Vault](https://azure.microsoft.com/en-us/products/key-vault).
+
+### Prerequisites
+
+- [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) (`az`) installed on your Buildkite agent
+- The agent must be authenticated to Azure (e.g., via managed identity, service principal, or `az login`)
+- The authenticated identity must have the `Key Vault Secrets User` role (or equivalent `get` permission) on the vault
+
+### Configuration
+
+Set `provider: azure` and `azure-vault-name` in your plugin configuration:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.0.0:
+          provider: azure
+          azure-vault-name: my-vault
+          variables:
+            API_KEY: my-api-key-secret
+```
+
+### Individual Variables
+
+Each key in `variables` maps to an Azure Key Vault secret name. The secret's value is fetched and exported as the corresponding environment variable:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.0.0:
+          provider: azure
+          azure-vault-name: my-vault
+          variables:
+            DB_PASSWORD: db-password
+            API_TOKEN: api-token
+            SSH_KEY: deploy-ssh-key
+```
+
+Azure Key Vault secret names must contain only alphanumeric characters and hyphens, and must start with an alphanumeric character.
+
+### Batch Secrets (Base64)
+
+Store multiple `KEY=value` pairs as a single base64-encoded Azure Key Vault secret, then use `env` to fetch and decode them all at once:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.0.0:
+          provider: azure
+          azure-vault-name: my-vault
+          env: batch-secrets
+```
+
+To create the batch secret:
+
+```shell
+# Create a file with KEY=value pairs
+cat > data.txt <<EOF
+DB_HOST=mydb.example.com
+DB_PASSWORD=supersecret
+API_KEY=abc123
+EOF
+
+# Base64 encode and store in Azure Key Vault
+az keyvault secret set --vault-name my-vault --name batch-secrets --value "$(base64 < data.txt)"
+```
+
+### Combining Both Methods
+
+You can use both `env` and `variables` together:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.0.0:
+          provider: azure
+          azure-vault-name: my-vault
+          env: common-secrets
+          variables:
+            DEPLOY_KEY: deploy-key
+```
+
+### Pinning a Secret Version
+
+By default, the latest version of each secret is fetched. To pin to a specific version:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.0.0:
+          provider: azure
+          azure-vault-name: my-vault
+          azure-secret-version: "a1b2c3d4e5f6"
+          variables:
+            API_KEY: my-api-key
+```
+
 ## Options
 
 ### `provider` (optional, string, default: `buildkite`)
 
-The secrets provider to use. Currently only `buildkite` is supported.
+The secrets provider to use. Supported values: `buildkite`, `azure`.
 
 ### `env` (optional, string)
-The secret key name to fetch multiple from Buildkite secrets.
+The secret key name containing base64-encoded `KEY=value` pairs. Used for fetching multiple secrets from a single stored value.
 
 ### `variables` (optional, object)
 Specify a dictionary of `key: value` pairs to inject as environment variables, where the key is the name of the
-environment variable to be set, and the value is the Buildkite Secret key.
+environment variable to be set, and the value is the secret name in the provider.
+
+### `azure-vault-name` (required when provider is `azure`, string)
+
+The name of the Azure Key Vault to fetch secrets from.
+
+### `azure-secret-version` (optional, string)
+
+The version of the Azure Key Vault secret to fetch. If not specified, the latest version is used.
 
 ### `skip-redaction` (optional, boolean, default: `false`)
 
