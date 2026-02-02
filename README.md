@@ -1,6 +1,10 @@
 # Secrets Buildkite Plugin
 
-A Buildkite plugin used to fetch secrets from [Buildkite Secrets](https://buildkite.com/docs/pipelines/security/secrets/buildkite-secrets).
+A Buildkite plugin to fetch secrets from multiple providers and inject them into your build environment.
+
+Supported providers:
+- [Buildkite Secrets](https://buildkite.com/docs/pipelines/security/secrets/buildkite-secrets) (default)
+- [GCP Secret Manager](https://cloud.google.com/secret-manager)
 
 ## Changes to consider when upgrading to `v2.0.0`
 
@@ -11,17 +15,17 @@ If upgrading from v1.x.x, note these changes:
 - **New default**: Secrets auto-redacted from logs (requires agent v3.67.0+). Opt out with `skip-redaction: true`
 - **Stricter errors**: Invalid base64-encoded secrets now fail immediately
 
-## Storing Secrets
+## Buildkite Secrets Provider
 
-There are two options for storing and fetching secrets.
+The default provider fetches secrets from [Buildkite Secrets](https://buildkite.com/docs/pipelines/security/secrets/buildkite-secrets).
 
 You can create a secret in your Buildkite cluster(s) from the Buildkite UI following the instructions in the documentation [here](https://buildkite.com/docs/pipelines/security/secrets/buildkite-secrets#create-a-secret-using-the-buildkite-interface).
 
-### One at a time
+### Individual Variables
 
 Create a Buildkite secret for each variable that you need to store. Paste the value of the secret into buildkite.com directly.
 
-A `pipeline.yml` like this will read each secret out into a ENV variable:
+A `pipeline.yml` like this will read each secret out into an environment variable:
 
 ```yml
 steps:
@@ -33,7 +37,7 @@ steps:
             FOO: bar
 ```
 
-### Multiple
+### Batch (Base64-Encoded)
 
 Create a single Buildkite secret with one variable per line, encoded as base64 for storage.
 
@@ -63,18 +67,97 @@ steps:
           env: "llamas"
 ```
 
+## GCP Secret Manager Provider
+
+Fetches secrets from [GCP Secret Manager](https://cloud.google.com/secret-manager).
+
+### Prerequisites
+
+- The [gcloud CLI](https://cloud.google.com/sdk/docs/install) must be installed and available on the Buildkite agent.
+- The agent must be authenticated to GCP with permissions to access Secret Manager (e.g., the `roles/secretmanager.secretAccessor` role).
+- The Secret Manager API must be enabled on the GCP project.
+
+### GCP Project Configuration
+
+The GCP project is resolved in this order:
+
+1. The `gcp-project` plugin option
+2. The `CLOUDSDK_CORE_PROJECT` environment variable
+3. The active `gcloud config` project (`gcloud config get-value project`)
+
+### Individual Variables
+
+Create secrets in GCP Secret Manager, then map them to environment variables:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.0.0:
+          provider: gcp
+          gcp-project: my-project-id
+          variables:
+            API_KEY: my-api-key-secret
+            DB_PASSWORD: my-db-password-secret
+```
+
+Each key under `variables` becomes the environment variable name, and the value is the GCP secret ID to fetch.
+
+### Batch (Base64-Encoded)
+
+Store multiple `KEY=value` pairs in a single GCP secret, base64-encoded:
+
+```shell
+# Create a file with your variables
+cat > secrets.txt <<EOF
+API_KEY=sk-abc123
+DB_HOST=db.example.com
+DB_PASSWORD=supersecret
+EOF
+
+# Base64-encode and store in GCP Secret Manager
+base64 secrets.txt | gcloud secrets create ci-env-secrets --data-file=-
+```
+
+Then reference the secret in your pipeline:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.0.0:
+          provider: gcp
+          gcp-project: my-project-id
+          env: "ci-env-secrets"
+```
+
+### Combining Both Methods
+
+You can use `env` and `variables` together to fetch both batch and individual secrets:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.0.0:
+          provider: gcp
+          gcp-project: my-project-id
+          env: "ci-env-secrets"
+          variables:
+            DEPLOY_KEY: deploy-key-secret
+```
+
 ## Options
 
 ### `provider` (optional, string, default: `buildkite`)
 
-The secrets provider to use. Currently only `buildkite` is supported.
+The secrets provider to use. Supported values: `buildkite`, `gcp`.
 
 ### `env` (optional, string)
-The secret key name to fetch multiple from Buildkite secrets.
+The secret key name for fetching batch secrets (base64-encoded `KEY=value` format). For the Buildkite provider, this is the Buildkite Secret key. For the GCP provider, this is the GCP secret ID.
 
 ### `variables` (optional, object)
-Specify a dictionary of `key: value` pairs to inject as environment variables, where the key is the name of the
-environment variable to be set, and the value is the Buildkite Secret key.
+A map of `ENV_VAR_NAME: secret-path` pairs to inject as environment variables. The key is the environment variable name to set, and the value is the secret identifier for the configured provider.
 
 ### `skip-redaction` (optional, boolean, default: `false`)
 
@@ -88,6 +171,14 @@ Maximum number of retry attempts for transient failures when fetching secrets (e
 ### `retry-base-delay` (optional, number, default: 2)
 
 Base delay in seconds for exponential backoff between retry attempts.
+
+### `gcp-project` (optional, string, GCP only)
+
+The GCP project ID. If not set, falls back to `CLOUDSDK_CORE_PROJECT` or the active `gcloud config` project.
+
+### `gcp-secret-version` (optional, string, default: `latest`, GCP only)
+
+The secret version to fetch. Defaults to `latest`.
 
 ## Secret Redaction
 
