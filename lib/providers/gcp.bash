@@ -93,21 +93,22 @@ download_gcp_secret() {
   fi
 }
 
-process_gcp_secrets() {
+decode_gcp_secrets() {
   local encoded_secret=$1
   local key_name=$2
   local decoded_secret
+  local envscript=''
   local key value
 
   if ! decoded_secret=$(echo "$encoded_secret" | base64 -d 2>&1); then
     log_error "Failed to decode base64 secret for key: ${key_name}"
     log_error "The secret may be malformed or not properly base64-encoded"
-    exit 1
+    return 1
   fi
 
   if [[ -z "$decoded_secret" ]] || [[ "$decoded_secret" =~ ^[[:space:]]+$ ]]; then
     log_error "Decoded secret for key: ${key_name} is empty or contains only whitespace"
-    exit 1
+    return 1
   fi
 
   while IFS='=' read -r key value; do
@@ -117,10 +118,39 @@ process_gcp_secrets() {
         continue
       fi
 
-      GCP_SECRETS_TO_REDACT+=("$value")
-      export "$key=$value"
+      # Properly quote the value to prevent shell interpretation during eval
+      # Use printf %q to shell-escape the value safely
+      local escaped_value
+      escaped_value=$(printf '%q' "$value")
+      envscript+="${key}=${escaped_value}"$'\n'
     fi
   done <<< "$decoded_secret"
+
+  echo "$envscript"
+}
+
+process_gcp_secrets() {
+  local encoded_secret=$1
+  local key_name=$2
+  local envscript=''
+
+  if ! envscript=$(decode_gcp_secrets "${encoded_secret}" "${key_name}"); then
+    log_error "Unable to decode secrets"
+    exit 1
+  fi
+
+  # Collect decoded secret values into the GCP_SECRETS_TO_REDACT array
+  # (defined as local in fetch_gcp_secrets). Bash's dynamic scoping allows
+  # this function to append to the parent function's local array
+  while IFS='=' read -r key value; do
+    if [ -n "$key" ] && [ -n "$value" ]; then
+      GCP_SECRETS_TO_REDACT+=("$value")
+    fi
+  done <<< "$envscript"
+
+  set -o allexport
+  eval "$envscript"
+  set +o allexport
 }
 
 process_gcp_variables() {
@@ -133,7 +163,12 @@ process_gcp_variables() {
       exit 1
     else
       GCP_SECRETS_TO_REDACT+=("$value")
-      export "${key}=${value}"
+
+      # Properly quote the value to prevent shell interpretation during eval
+      # Use printf %q to shell-escape the value safely
+      local escaped_value
+      escaped_value=$(printf '%q' "$value")
+      eval "export ${key}=${escaped_value}"
     fi
   done
 }
