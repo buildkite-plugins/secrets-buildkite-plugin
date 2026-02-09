@@ -34,7 +34,7 @@ az_secret_get_with_retry() {
   while [ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]; do
     local STDERR_TMP
     STDERR_TMP=$(mktemp)
-    trap "rm -f '$STDERR_TMP'" RETURN
+    trap 'rm -f "$STDERR_TMP"' RETURN
 
     set +e
     OUTPUT=$("${cmd[@]}" 2>"$STDERR_TMP")
@@ -51,6 +51,9 @@ az_secret_get_with_retry() {
     fi
 
     # Check for non-retryable errors (4xx equivalents)
+    # Note: Azure CLI returns exit code 1 for all errors; it doesn't provide distinct
+    # exit codes for different error types. We must parse stderr to distinguish between
+    # non-retryable errors (auth failures, not found) and retryable errors (service unavailable).
     if echo "$STDERR_OUTPUT" | grep -qiE "SecretNotFound|ResourceNotFound|\(404\)|Forbidden|\(403\)|Unauthorized|\(401\)|BadParameter|\(400\)"; then
       echo "$STDERR_OUTPUT" >&2
       return "$EXIT_CODE"

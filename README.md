@@ -70,7 +70,7 @@ Use `provider: azure` to fetch secrets from [Azure Key Vault](https://azure.micr
 ### Prerequisites
 
 - [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) (`az`) installed on your Buildkite agent
-- The agent must be authenticated to Azure (e.g., via managed identity, service principal, or `az login`)
+- The agent must be authenticated to Azure. For Buildkite-hosted agents, use the [azure-login](https://github.com/buildkite-plugins/azure-login-buildkite-plugin) plugin to authenticate via OIDC.
 - The authenticated identity must have the `Key Vault Secrets User` role (or equivalent `get` permission) on the vault
 
 ### Configuration
@@ -81,6 +81,9 @@ Set `provider: azure` and `azure-vault-name` in your plugin configuration:
 steps:
   - command: build.sh
     plugins:
+      - azure-login#v1.0.0:
+          oidc-client-id: "your-client-id"
+          tenant-id: "your-tenant-id"
       - secrets#v2.0.0:
           provider: azure
           azure-vault-name: my-vault
@@ -96,6 +99,9 @@ Each key in `variables` maps to an Azure Key Vault secret name. The secret's val
 steps:
   - command: build.sh
     plugins:
+      - azure-login#v1.0.0:
+          oidc-client-id: "your-client-id"
+          tenant-id: "your-tenant-id"
       - secrets#v2.0.0:
           provider: azure
           azure-vault-name: my-vault
@@ -115,6 +121,9 @@ Store multiple `KEY=value` pairs as a single base64-encoded Azure Key Vault secr
 steps:
   - command: build.sh
     plugins:
+      - azure-login#v1.0.0:
+          oidc-client-id: "your-client-id"
+          tenant-id: "your-tenant-id"
       - secrets#v2.0.0:
           provider: azure
           azure-vault-name: my-vault
@@ -143,6 +152,9 @@ You can use both `env` and `variables` together:
 steps:
   - command: build.sh
     plugins:
+      - azure-login#v1.0.0:
+          oidc-client-id: "your-client-id"
+          tenant-id: "your-tenant-id"
       - secrets#v2.0.0:
           provider: azure
           azure-vault-name: my-vault
@@ -159,6 +171,9 @@ By default, the latest version of each secret is fetched. To pin to a specific v
 steps:
   - command: build.sh
     plugins:
+      - azure-login#v1.0.0:
+          oidc-client-id: "your-client-id"
+          tenant-id: "your-tenant-id"
       - secrets#v2.0.0:
           provider: azure
           azure-vault-name: my-vault

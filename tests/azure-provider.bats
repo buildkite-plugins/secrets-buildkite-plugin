@@ -221,3 +221,16 @@ MOCK
   assert_failure
   assert_output --partial "Invalid Azure secret name"
 }
+
+@test "Azure: Uses azure-secret-version when specified" {
+  export BUILDKITE_PLUGIN_SECRETS_VARIABLES_API_KEY="my-api-key"
+  export BUILDKITE_PLUGIN_SECRETS_AZURE_SECRET_VERSION="abc123def456"
+
+  stub az "keyvault secret show --vault-name my-vault --name my-api-key --query value -o tsv --version abc123def456 : echo versioned-secret-value"
+
+  run bash -c "source $PWD/hooks/environment && echo API_KEY=\$API_KEY"
+
+  assert_success
+  assert_output --partial "API_KEY=versioned-secret-value"
+  unstub az
+}
