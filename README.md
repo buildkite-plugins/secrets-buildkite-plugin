@@ -74,7 +74,7 @@ Fetches secrets from [GCP Secret Manager](https://cloud.google.com/secret-manage
 ### Prerequisites
 
 - The [gcloud CLI](https://cloud.google.com/sdk/docs/install) must be installed and available on the Buildkite agent.
-- The agent must be authenticated to GCP with permissions to access Secret Manager (e.g., the `roles/secretmanager.secretAccessor` role).
+- The agent must be authenticated to GCP with permissions to access Secret Manager (e.g., the `roles/secretmanager.secretAccessor` role). For Buildkite-hosted agents, use the [gcp-workload-identity-federation](https://github.com/buildkite-plugins/gcp-workload-identity-federation-buildkite-plugin) plugin to authenticate.
 - The Secret Manager API must be enabled on the GCP project.
 
 ### GCP Project Configuration
@@ -93,6 +93,9 @@ Create secrets in GCP Secret Manager, then map them to environment variables:
 steps:
   - command: build.sh
     plugins:
+      - gcp-workload-identity-federation#v2.0.0:
+          audience: "//iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/buildkite"
+          service-account: "my-service-account@my-project-id.iam.gserviceaccount.com"
       - secrets#v2.0.0:
           provider: gcp
           gcp-project: my-project-id
@@ -125,6 +128,9 @@ Then reference the secret in your pipeline:
 steps:
   - command: build.sh
     plugins:
+      - gcp-workload-identity-federation#v2.0.0:
+          audience: "//iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/buildkite"
+          service-account: "my-service-account@my-project-id.iam.gserviceaccount.com"
       - secrets#v2.0.0:
           provider: gcp
           gcp-project: my-project-id
@@ -139,6 +145,9 @@ You can use `env` and `variables` together to fetch both batch and individual se
 steps:
   - command: build.sh
     plugins:
+      - gcp-workload-identity-federation#v2.0.0:
+          audience: "//iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/buildkite"
+          service-account: "my-service-account@my-project-id.iam.gserviceaccount.com"
       - secrets#v2.0.0:
           provider: gcp
           gcp-project: my-project-id
@@ -149,36 +158,27 @@ steps:
 
 ## Options
 
-### `provider` (optional, string, default: `buildkite`)
+### Common Options
 
-The secrets provider to use. Supported values: `buildkite`, `gcp`.
+These options apply to all providers.
 
-### `env` (optional, string)
-The secret key name for fetching batch secrets (base64-encoded `KEY=value` format). For the Buildkite provider, this is the Buildkite Secret key. For the GCP provider, this is the GCP secret ID.
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `provider` | string | `buildkite` | The secrets provider to use. Supported values: `buildkite`, `gcp`. |
+| `env` | string | - | Secret key name for fetching batch secrets (base64-encoded `KEY=value` format). |
+| `variables` | object | - | Map of `ENV_VAR_NAME: secret-path` pairs to inject as environment variables. |
+| `skip-redaction` | boolean | `false` | If `true`, secrets will not be automatically redacted from logs. |
+| `retry-max-attempts` | number | `5` | Maximum retry attempts for transient failures. |
+| `retry-base-delay` | number | `2` | Base delay in seconds for exponential backoff between retries. |
 
-### `variables` (optional, object)
-A map of `ENV_VAR_NAME: secret-path` pairs to inject as environment variables. The key is the environment variable name to set, and the value is the secret identifier for the configured provider.
+### GCP Provider Options
 
-### `skip-redaction` (optional, boolean, default: `false`)
+These options only apply when `provider: gcp` is set.
 
-If set to `true`, secrets will not be automatically redacted from Buildkite logs. By default, all fetched secrets are automatically redacted using the buildkite-agent redactor feature.
-Secret redaction requires buildkite-agent `v3.67.0` or later. If an older agent version is used, a warning will be issued.
-
-### `retry-max-attempts` (optional, number, default: 5)
-
-Maximum number of retry attempts for transient failures when fetching secrets (e.g., 5xx server errors, network issues).
-
-### `retry-base-delay` (optional, number, default: 2)
-
-Base delay in seconds for exponential backoff between retry attempts.
-
-### `gcp-project` (optional, string, GCP only)
-
-The GCP project ID. If not set, falls back to `CLOUDSDK_CORE_PROJECT` or the active `gcloud config` project.
-
-### `gcp-secret-version` (optional, string, default: `latest`, GCP only)
-
-The secret version to fetch. Defaults to `latest`.
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `gcp-project` | string | - | GCP project ID. Falls back to `CLOUDSDK_CORE_PROJECT` or `gcloud config`. |
+| `gcp-secret-version` | string | `latest` | The secret version to fetch. |
 
 ## Secret Redaction
 

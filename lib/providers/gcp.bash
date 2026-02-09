@@ -163,12 +163,7 @@ process_gcp_variables() {
       exit 1
     else
       GCP_SECRETS_TO_REDACT+=("$value")
-
-      # Properly quote the value to prevent shell interpretation during eval
-      # Use printf %q to shell-escape the value safely
-      local escaped_value
-      escaped_value=$(printf '%q' "$value")
-      eval "export ${key}=${escaped_value}"
+      export "${key}=${value}"
     fi
   done
 }
