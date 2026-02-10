@@ -112,10 +112,11 @@ EOF
   unstub az
 }
 
-@test "Azure: No retry on SecretNotFound" {
+@test "Azure: No retry on SecretNotFound (exit code 3)" {
   export BUILDKITE_PLUGIN_SECRETS_VARIABLES_API_KEY="missing-secret"
 
-  stub az "keyvault secret show --vault-name my-vault --name missing-secret --query value -o tsv : echo 'ERROR: SecretNotFound' >&2 && exit 1"
+  # Azure CLI returns exit code 3 for resource not found
+  stub az "keyvault secret show --vault-name my-vault --name missing-secret --query value -o tsv : echo 'ERROR: SecretNotFound' >&2 && exit 3"
 
   run bash -c "$PWD/hooks/environment"
 
@@ -232,5 +233,24 @@ MOCK
 
   assert_success
   assert_output --partial "API_KEY=versioned-secret-value"
+  unstub az
+}
+
+@test "Azure: Combined env and variables usage" {
+  # Set up batch secrets (base64 encoded FOO=bar and BAR=baz)
+  export TESTDATA=$(echo -e "FOO=bar\nBAR=baz" | base64)
+  export BUILDKITE_PLUGIN_SECRETS_ENV="batch-secrets"
+  export BUILDKITE_PLUGIN_SECRETS_VARIABLES_API_KEY="my-api-key"
+
+  stub az \
+    "keyvault secret show --vault-name my-vault --name batch-secrets --query value -o tsv : echo \${TESTDATA}" \
+    "keyvault secret show --vault-name my-vault --name my-api-key --query value -o tsv : echo individual-secret-value"
+
+  run bash -c "source $PWD/hooks/environment && echo FOO=\$FOO && echo BAR=\$BAR && echo API_KEY=\$API_KEY"
+
+  assert_success
+  assert_output --partial "FOO=bar"
+  assert_output --partial "BAR=baz"
+  assert_output --partial "API_KEY=individual-secret-value"
   unstub az
 }

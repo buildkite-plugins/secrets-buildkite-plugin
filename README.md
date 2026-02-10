@@ -81,8 +81,8 @@ Set `provider: azure` and `azure-vault-name` in your plugin configuration:
 steps:
   - command: build.sh
     plugins:
-      - azure-login#v1.0.0:
-          oidc-client-id: "your-client-id"
+      - azure-login#v1.0.1:
+          client-id: "your-client-id"
           tenant-id: "your-tenant-id"
       - secrets#v2.0.0:
           provider: azure
@@ -99,8 +99,8 @@ Each key in `variables` maps to an Azure Key Vault secret name. The secret's val
 steps:
   - command: build.sh
     plugins:
-      - azure-login#v1.0.0:
-          oidc-client-id: "your-client-id"
+      - azure-login#v1.0.1:
+          client-id: "your-client-id"
           tenant-id: "your-tenant-id"
       - secrets#v2.0.0:
           provider: azure
@@ -121,8 +121,8 @@ Store multiple `KEY=value` pairs as a single base64-encoded Azure Key Vault secr
 steps:
   - command: build.sh
     plugins:
-      - azure-login#v1.0.0:
-          oidc-client-id: "your-client-id"
+      - azure-login#v1.0.1:
+          client-id: "your-client-id"
           tenant-id: "your-tenant-id"
       - secrets#v2.0.0:
           provider: azure
@@ -152,8 +152,8 @@ You can use both `env` and `variables` together:
 steps:
   - command: build.sh
     plugins:
-      - azure-login#v1.0.0:
-          oidc-client-id: "your-client-id"
+      - azure-login#v1.0.1:
+          client-id: "your-client-id"
           tenant-id: "your-tenant-id"
       - secrets#v2.0.0:
           provider: azure
@@ -171,8 +171,8 @@ By default, the latest version of each secret is fetched. To pin to a specific v
 steps:
   - command: build.sh
     plugins:
-      - azure-login#v1.0.0:
-          oidc-client-id: "your-client-id"
+      - azure-login#v1.0.1:
+          client-id: "your-client-id"
           tenant-id: "your-tenant-id"
       - secrets#v2.0.0:
           provider: azure
