@@ -70,7 +70,7 @@ Use `provider: azure` to fetch secrets from [Azure Key Vault](https://azure.micr
 ### Prerequisites
 
 - [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) (`az`) installed on your Buildkite agent
-- The agent must be authenticated to Azure. For Buildkite-hosted agents, use the [azure-login](https://github.com/buildkite-plugins/azure-login-buildkite-plugin) plugin to authenticate via OIDC.
+- The agent must be authenticated to Azure. Use the [azure-login](https://github.com/buildkite-plugins/azure-login-buildkite-plugin) plugin to authenticate via managed identity or service principal.
 - The authenticated identity must have the `Key Vault Secrets User` role (or equivalent `get` permission) on the vault
 
 ### Configuration
