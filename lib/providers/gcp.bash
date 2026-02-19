@@ -45,37 +45,37 @@ gcp_secret_get_with_retry() {
     cmd+=(--project="${PROJECT}")
   fi
 
-  while [ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]; do
+  while [[ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]]; do
     set +e
     OUTPUT=$("${cmd[@]}" 2>"$STDERR_TMP")
     EXIT_CODE=$?
-    ERROR_OUTPUT=$(cat "$STDERR_TMP")
+    ERROR_OUTPUT=$(<"$STDERR_TMP")
     set -e
 
-    if [ "$EXIT_CODE" -eq 0 ]; then
+    if [[ "$EXIT_CODE" -eq 0 ]]; then
       echo "$OUTPUT"
       return 0
     fi
 
     # Non-retryable errors: INVALID_ARGUMENT, UNAUTHENTICATED, PERMISSION_DENIED, NOT_FOUND
     if echo "$ERROR_OUTPUT" | grep -qiE "(INVALID_ARGUMENT|UNAUTHENTICATED|PERMISSION_DENIED|NOT_FOUND|400|401|403|404)"; then
-      echo "$ERROR_OUTPUT"
+      log_error "$ERROR_OUTPUT"
       return "$EXIT_CODE"
     fi
 
     # Retryable errors: UNAVAILABLE, RESOURCE_EXHAUSTED, network errors
-    if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
+    if [[ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]]; then
       local TOTAL_DELAY
       TOTAL_DELAY=$(calculate_backoff_delay "$BASE_DELAY" "$ATTEMPT")
 
       log_info "Failed to fetch GCP secret $SECRET_ID (attempt $ATTEMPT/$MAX_ATTEMPTS). Retrying in ${TOTAL_DELAY}s..."
-      echo "Error: $ERROR_OUTPUT" >&2
+      log_error "$ERROR_OUTPUT"
 
       sleep "$TOTAL_DELAY"
       ATTEMPT=$((ATTEMPT + 1))
     else
       log_error "Failed to fetch GCP secret $SECRET_ID after $MAX_ATTEMPTS attempts"
-      echo "Error: $ERROR_OUTPUT" >&2
+      log_error "$ERROR_OUTPUT"
       return "$EXIT_CODE"
     fi
   done
@@ -100,7 +100,7 @@ decode_gcp_secrets() {
   local envscript=''
   local key value
 
-  if ! decoded_secret=$(echo "$encoded_secret" | base64 -d 2>&1); then
+  if ! decoded_secret=$(base64 -d <<< "$encoded_secret" 2>&1); then
     log_error "Failed to decode base64 secret for key: ${key_name}"
     log_error "The secret may be malformed or not properly base64-encoded"
     return 1
@@ -112,7 +112,7 @@ decode_gcp_secrets() {
   fi
 
   while IFS='=' read -r key value; do
-    if [ -n "$key" ] && [ -n "$value" ]; then
+    if [[ -n "$key" ]] && [[ -n "$value" ]]; then
       if [[ ! "$key" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
         log_warning "Skipping invalid variable name '${key}' in secret '${key_name}' (must start with letter or underscore)"
         continue
@@ -143,7 +143,7 @@ process_gcp_secrets() {
   # (defined as local in fetch_gcp_secrets). Bash's dynamic scoping allows
   # this function to append to the parent function's local array
   while IFS='=' read -r key value; do
-    if [ -n "$key" ] && [ -n "$value" ]; then
+    if [[ -n "$key" ]] && [[ -n "$value" ]]; then
       GCP_SECRETS_TO_REDACT+=("$value")
     fi
   done <<< "$envscript"

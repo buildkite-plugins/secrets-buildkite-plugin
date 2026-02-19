@@ -236,6 +236,38 @@ AGENT_EOF
   unstub gcloud
 }
 
+@test "GCP: Uses gcp-secret-version when specified" {
+  export BUILDKITE_PLUGIN_SECRETS_VARIABLES_API_KEY="my-api-secret"
+  export BUILDKITE_PLUGIN_SECRETS_GCP_SECRET_VERSION="5"
+
+  stub gcloud \
+    "secrets versions access 5 --secret=my-api-secret --project=test-project : echo versioned-secret-value"
+
+  run bash -c "source $PWD/hooks/environment && echo API_KEY=\$API_KEY"
+
+  assert_success
+  assert_output --partial "API_KEY=versioned-secret-value"
+  unstub gcloud
+}
+
+@test "GCP: Combined env and variables usage" {
+  export TESTDATA=$(echo -e "FOO=bar\nBAR=baz" | base64)
+  export BUILDKITE_PLUGIN_SECRETS_ENV="env-secrets"
+  export BUILDKITE_PLUGIN_SECRETS_VARIABLES_API_KEY="my-api-secret"
+
+  stub gcloud \
+    "secrets versions access latest --secret=env-secrets --project=test-project : echo \${TESTDATA}" \
+    "secrets versions access latest --secret=my-api-secret --project=test-project : echo individual-secret-value"
+
+  run bash -c "source $PWD/hooks/environment && echo FOO=\$FOO && echo BAR=\$BAR && echo API_KEY=\$API_KEY"
+
+  assert_success
+  assert_output --partial "FOO=bar"
+  assert_output --partial "BAR=baz"
+  assert_output --partial "API_KEY=individual-secret-value"
+  unstub gcloud
+}
+
 @test "GCP: Rejects invalid secret IDs" {
   export BUILDKITE_PLUGIN_SECRETS_VARIABLES_API_KEY="invalid secret/name!"
 

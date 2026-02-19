@@ -93,7 +93,7 @@ Create secrets in GCP Secret Manager, then map them to environment variables:
 steps:
   - command: build.sh
     plugins:
-      - gcp-workload-identity-federation#v2.0.0:
+      - gcp-workload-identity-federation#v1.5.0:
           audience: "//iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/buildkite"
           service-account: "my-service-account@my-project-id.iam.gserviceaccount.com"
       - secrets#v2.0.0:
@@ -128,7 +128,7 @@ Then reference the secret in your pipeline:
 steps:
   - command: build.sh
     plugins:
-      - gcp-workload-identity-federation#v2.0.0:
+      - gcp-workload-identity-federation#v1.5.0:
           audience: "//iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/buildkite"
           service-account: "my-service-account@my-project-id.iam.gserviceaccount.com"
       - secrets#v2.0.0:
@@ -145,7 +145,7 @@ You can use `env` and `variables` together to fetch both batch and individual se
 steps:
   - command: build.sh
     plugins:
-      - gcp-workload-identity-federation#v2.0.0:
+      - gcp-workload-identity-federation#v1.5.0:
           audience: "//iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/buildkite"
           service-account: "my-service-account@my-project-id.iam.gserviceaccount.com"
       - secrets#v2.0.0:
