@@ -9,9 +9,15 @@ configuration:
   properties:
     provider:
       type: string
-      enum: ["buildkite", "gcp"]
+      enum: ["buildkite", "gcp", "azure"]
       default: "buildkite"
       description: "The secrets provider to use."
+    azure-vault-name:
+      type: string
+      description: "The Azure Key Vault name (required when provider is azure)."
+    azure-secret-version:
+      type: string
+      description: "The Azure Key Vault secret version (optional, defaults to latest)."
     env:
       type: string
       description: "Secret key name for batch secrets (base64-encoded KEY=value format)"

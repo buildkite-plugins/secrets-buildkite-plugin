@@ -36,12 +36,11 @@ source "${SHARED_LIB}"
 # when the user omits optional plugin keys
 plugin_read_config
 
-# Load provider implementation dynamically based on configured provider
+# Load provider implementations dynamically based on the configured provider
 load_provider() {
   local provider="${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
   local provider_file
   provider_file="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/providers/${provider}.bash"
-
   if [[ ! -f "${provider_file}" ]]; then
     log_error "Provider '${provider}' not found at ${provider_file}"
     exit 1
@@ -59,6 +58,9 @@ setup_provider_environment() {
     gcp)
       setup_gcp_environment
       ;;
+    azure)
+      setup_azure_environment
+      ;;
     *)
       unknown_provider "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
       ;;
@@ -72,6 +74,9 @@ fetch_secrets() {
       ;;
     gcp)
       fetch_gcp_secrets
+      ;;
+    azure)
+      fetch_azure_secrets
       ;;
     *)
       unknown_provider "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"

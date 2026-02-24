@@ -54,6 +54,13 @@ check_dependencies() {
         log_info "Install: https://cloud.google.com/sdk/docs/install"
       fi
       ;;
+    azure)
+      if ! command_exists az; then
+        missing_deps+=("az")
+        log_error "Azure CLI (az) is required for Azure Key Vault"
+        log_info "Install: https://learn.microsoft.com/en-us/cli/azure/install-azure-cli"
+      fi
+      ;;
     *)
       unknown_provider "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
       ;;

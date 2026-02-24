@@ -5,6 +5,7 @@ A Buildkite plugin to fetch secrets from multiple providers and inject them into
 Supported providers:
 - [Buildkite Secrets](https://buildkite.com/docs/pipelines/security/secrets/buildkite-secrets) (default)
 - [GCP Secret Manager](https://cloud.google.com/secret-manager)
+- [Azure Key Vault](https://azure.microsoft.com/en-us/products/key-vault)
 
 ## Changes to consider when upgrading to `v2.0.0`
 
@@ -15,7 +16,7 @@ If upgrading from v1.x.x, note these changes:
 - **New default**: Secrets auto-redacted from logs (requires agent v3.67.0+). Opt out with `skip-redaction: true`
 - **Stricter errors**: Invalid base64-encoded secrets now fail immediately
 
-## Buildkite Secrets Provider
+## Buildkite Secrets Provider (Default)
 
 The default provider fetches secrets from [Buildkite Secrets](https://buildkite.com/docs/pipelines/security/secrets/buildkite-secrets).
 
@@ -37,7 +38,7 @@ steps:
             FOO: bar
 ```
 
-### Batch (Base64-Encoded)
+### Batch Secrets (Base64)
 
 Create a single Buildkite secret with one variable per line, encoded as base64 for storage.
 
@@ -137,6 +138,87 @@ steps:
           env: "ci-env-secrets"
 ```
 
+## Azure Key Vault Provider
+
+Use `provider: azure` to fetch secrets from [Azure Key Vault](https://azure.microsoft.com/en-us/products/key-vault).
+
+### Prerequisites
+
+- [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) (`az`) installed on your Buildkite agent
+- The agent must be authenticated to Azure. Use the [azure-login](https://github.com/buildkite-plugins/azure-login-buildkite-plugin) plugin to authenticate via managed identity or service principal.
+- The authenticated identity must have the `Key Vault Secrets User` role (or equivalent `get` permission) on the vault
+
+### Configuration
+
+Set `provider: azure` and `azure-vault-name` in your plugin configuration:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - azure-login#v1.0.1:
+          client-id: "your-client-id"
+          tenant-id: "your-tenant-id"
+      - secrets#v2.0.0:
+          provider: azure
+          azure-vault-name: my-vault
+          variables:
+            API_KEY: my-api-key-secret
+```
+
+### Individual Variables
+
+Each key in `variables` maps to an Azure Key Vault secret name. The secret's value is fetched and exported as the corresponding environment variable:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - azure-login#v1.0.1:
+          client-id: "your-client-id"
+          tenant-id: "your-tenant-id"
+      - secrets#v2.0.0:
+          provider: azure
+          azure-vault-name: my-vault
+          variables:
+            DB_PASSWORD: db-password
+            API_TOKEN: api-token
+            SSH_KEY: deploy-ssh-key
+```
+
+Azure Key Vault secret names must contain only alphanumeric characters and hyphens, and must start with an alphanumeric character.
+
+### Batch Secrets (Base64)
+
+Store multiple `KEY=value` pairs as a single base64-encoded Azure Key Vault secret, then use `env` to fetch and decode them all at once:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - azure-login#v1.0.1:
+          client-id: "your-client-id"
+          tenant-id: "your-tenant-id"
+      - secrets#v2.0.0:
+          provider: azure
+          azure-vault-name: my-vault
+          env: batch-secrets
+```
+
+To create the batch secret:
+
+```shell
+# Create a file with KEY=value pairs
+cat > data.txt <<EOF
+DB_HOST=mydb.example.com
+DB_PASSWORD=supersecret
+API_KEY=abc123
+EOF
+
+# Base64 encode and store in Azure Key Vault
+az keyvault secret set --vault-name my-vault --name batch-secrets --value "$(base64 < data.txt)"
+```
+
 ### Combining Both Methods
 
 You can use `env` and `variables` together to fetch both batch and individual secrets:
@@ -156,6 +238,29 @@ steps:
             DEPLOY_KEY: deploy-key-secret
 ```
 
+### Pinning a Secret Version (GCP)
+
+By default, the latest version of each secret is fetched. To pin to a specific version, set `gcp-secret-version` in your plugin configuration.
+
+### Pinning a Secret Version (Azure)
+
+By default, the latest version of each secret is fetched. To pin to a specific version:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - azure-login#v1.0.1:
+          client-id: "your-client-id"
+          tenant-id: "your-tenant-id"
+      - secrets#v2.0.0:
+          provider: azure
+          azure-vault-name: my-vault
+          azure-secret-version: "a1b2c3d4e5f6"
+          variables:
+            API_KEY: my-api-key
+```
+
 ## Options
 
 ### Common Options
@@ -164,7 +269,7 @@ These options apply to all providers.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `provider` | string | `buildkite` | The secrets provider to use. Supported values: `buildkite`, `gcp`. |
+| `provider` | string | `buildkite` | The secrets provider to use. Supported values: `buildkite`, `gcp`, `azure`. |
 | `env` | string | - | Secret key name for fetching batch secrets (base64-encoded `KEY=value` format). |
 | `variables` | object | - | Map of `ENV_VAR_NAME: secret-path` pairs to inject as environment variables. |
 | `skip-redaction` | boolean | `false` | If `true`, secrets will not be automatically redacted from logs. |
@@ -179,6 +284,15 @@ These options only apply when `provider: gcp` is set.
 |--------|------|---------|-------------|
 | `gcp-project` | string | - | GCP project ID. Falls back to `CLOUDSDK_CORE_PROJECT` or `gcloud config`. |
 | `gcp-secret-version` | string | `latest` | The secret version to fetch. |
+
+### Azure Provider Options
+
+These options only apply when `provider: azure` is set.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `azure-vault-name` | string | - | The Azure Key Vault name (required when provider is azure). |
+| `azure-secret-version` | string | latest | The secret version to fetch. If not specified, the latest version is used. |
 
 ## Secret Redaction
 
