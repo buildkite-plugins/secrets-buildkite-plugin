@@ -102,13 +102,16 @@ process_gcp_secrets() {
   local decoded_secret
   local key value
 
-  if ! decoded_secret=$(echo "$encoded_secret" | base64 -d 2>&1); then
+  local decode_status=0
+  decoded_secret=$(echo "$encoded_secret" | base64 -d 2>/dev/null) || decode_status=$?
+
+  if [[ $decode_status -ne 0 ]] || [[ -z "$decoded_secret" ]]; then
     log_error "Failed to decode base64 secret for key: ${key_name}"
     log_error "The secret may be malformed or not properly base64-encoded"
     return 1
   fi
 
-  if [[ -z "$decoded_secret" ]] || [[ "$decoded_secret" =~ ^[[:space:]]+$ ]]; then
+  if [[ "$decoded_secret" =~ ^[[:space:]]+$ ]]; then
     log_error "Decoded secret for key: ${key_name} is empty or contains only whitespace"
     return 1
   fi
