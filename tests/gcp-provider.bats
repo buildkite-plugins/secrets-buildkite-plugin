@@ -276,3 +276,49 @@ AGENT_EOF
   assert_failure
   assert_output --partial "Invalid GCP secret ID"
 }
+
+@test "GCP: Uses gcloud config project as fallback" {
+  unset BUILDKITE_PLUGIN_SECRETS_GCP_PROJECT
+  unset CLOUDSDK_CORE_PROJECT
+  export BUILDKITE_PLUGIN_SECRETS_VARIABLES_API_KEY="my-secret"
+
+  # setup_gcp_environment calls gcloud config and exports the result as
+  # BUILDKITE_PLUGIN_SECRETS_GCP_PROJECT, so --project is passed explicitly at fetch time.
+  stub gcloud \
+    "config get-value project : echo gcloud-config-project" \
+    "secrets versions access latest --secret=my-secret --project=gcloud-config-project : echo secret-from-gcloud-config"
+
+  run bash -c "source $PWD/hooks/environment && echo API_KEY=\$API_KEY"
+
+  assert_success
+  assert_output --partial "API_KEY=secret-from-gcloud-config"
+  unstub gcloud
+}
+
+@test "GCP: Fails on invalid base64 in env secret" {
+  export BUILDKITE_PLUGIN_SECRETS_ENV="env-secrets"
+
+  stub gcloud \
+    "secrets versions access latest --secret=env-secrets --project=test-project : echo '!@#\$%^&*'"
+
+  run bash -c "$PWD/hooks/environment"
+
+  assert_failure
+  assert_output --partial "Failed to decode base64 secret"
+  unstub gcloud
+}
+
+@test "GCP: Fails on whitespace-only decoded env secret" {
+  export WHITESPACE_B64
+  WHITESPACE_B64=$(printf '   \n' | base64)
+  export BUILDKITE_PLUGIN_SECRETS_ENV="env-secrets"
+
+  stub gcloud \
+    "secrets versions access latest --secret=env-secrets --project=test-project : echo \${WHITESPACE_B64}"
+
+  run bash -c "$PWD/hooks/environment"
+
+  assert_failure
+  assert_output --partial "empty or contains only whitespace"
+  unstub gcloud
+}

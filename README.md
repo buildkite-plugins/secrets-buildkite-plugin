@@ -219,9 +219,11 @@ EOF
 az keyvault secret set --vault-name my-vault --name batch-secrets --value "$(base64 < data.txt)"
 ```
 
-### Combining Both Methods
+## Combining Both Methods
 
-You can use `env` and `variables` together to fetch both batch and individual secrets:
+You can use `env` and `variables` together to fetch both batch and individual secrets in a single plugin call.
+
+**GCP:**
 
 ```yaml
 steps:
@@ -238,11 +240,43 @@ steps:
             DEPLOY_KEY: deploy-key-secret
 ```
 
-### Pinning a Secret Version (GCP)
+**Azure:**
 
-By default, the latest version of each secret is fetched. To pin to a specific version, set `gcp-secret-version` in your plugin configuration.
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - azure-login#v1.0.1:
+          client-id: "your-client-id"
+          tenant-id: "your-tenant-id"
+      - secrets#v2.0.0:
+          provider: azure
+          azure-vault-name: my-vault
+          env: batch-secrets
+          variables:
+            DEPLOY_KEY: deploy-key-secret
+```
 
-### Pinning a Secret Version (Azure)
+## Pinning a Secret Version (GCP)
+
+By default, the latest version of each secret is fetched. To pin to a specific version:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - gcp-workload-identity-federation#v1.5.0:
+          audience: "//iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/buildkite"
+          service-account: "my-service-account@my-project-id.iam.gserviceaccount.com"
+      - secrets#v2.0.0:
+          provider: gcp
+          gcp-project: my-project-id
+          gcp-secret-version: "5"
+          variables:
+            API_KEY: my-api-key-secret
+```
+
+## Pinning a Secret Version (Azure)
 
 By default, the latest version of each secret is fetched. To pin to a specific version:
 

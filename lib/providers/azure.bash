@@ -115,8 +115,18 @@ process_azure_secrets() {
     return 1
   fi
 
-  while IFS='=' read -r key value; do
-    if [ -n "$key" ] && [ -n "$value" ]; then
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+
+    if [[ "$line" != *"="* ]]; then
+      log_warning "Skipping malformed line in secret '${key_name}': missing '=' separator"
+      continue
+    fi
+
+    key="${line%%=*}"
+    value="${line#*=}"
+
+    if [[ -n "$key" ]]; then
       # Validate the key is a valid shell variable name
       if [[ ! "$key" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
         log_warning "Skipping invalid variable name '${key}' in secret '${key_name}' (must start with letter or underscore)"
@@ -130,6 +140,7 @@ process_azure_secrets() {
 }
 
 process_azure_variables() {
+  local key path value
   for param in ${!BUILDKITE_PLUGIN_SECRETS_VARIABLES_*}; do
     key="${param/BUILDKITE_PLUGIN_SECRETS_VARIABLES_/}"
     path="${!param}"
