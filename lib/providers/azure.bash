@@ -104,19 +104,32 @@ process_azure_secrets() {
   local decoded_secret
   local key value
 
-  if ! decoded_secret=$(echo "$encoded_secret" | base64 -d 2>&1); then
+  local decode_status=0
+  decoded_secret=$(echo "$encoded_secret" | base64 -d 2>/dev/null) || decode_status=$?
+
+  if [[ $decode_status -ne 0 ]] || [[ -z "$decoded_secret" ]]; then
     log_error "Failed to decode base64 secret for key: ${key_name}"
     log_error "The secret may be malformed or not properly base64-encoded"
     return 1
   fi
 
-  if [[ -z "$decoded_secret" ]] || [[ "$decoded_secret" =~ ^[[:space:]]+$ ]]; then
+  if [[ "$decoded_secret" =~ ^[[:space:]]+$ ]]; then
     log_error "Decoded secret for key: ${key_name} is empty or contains only whitespace"
     return 1
   fi
 
-  while IFS='=' read -r key value; do
-    if [ -n "$key" ] && [ -n "$value" ]; then
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+
+    if [[ "$line" != *"="* ]]; then
+      log_warning "Skipping malformed line in secret '${key_name}': missing '=' separator"
+      continue
+    fi
+
+    key="${line%%=*}"
+    value="${line#*=}"
+
+    if [[ -n "$key" ]]; then
       # Validate the key is a valid shell variable name
       if [[ ! "$key" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
         log_warning "Skipping invalid variable name '${key}' in secret '${key_name}' (must start with letter or underscore)"
@@ -130,6 +143,7 @@ process_azure_secrets() {
 }
 
 process_azure_variables() {
+  local key path value
   for param in ${!BUILDKITE_PLUGIN_SECRETS_VARIABLES_*}; do
     key="${param/BUILDKITE_PLUGIN_SECRETS_VARIABLES_/}"
     path="${!param}"

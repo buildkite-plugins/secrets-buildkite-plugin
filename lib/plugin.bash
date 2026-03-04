@@ -55,6 +55,9 @@ setup_provider_environment() {
     buildkite)
       setup_buildkite_environment
       ;;
+    gcp)
+      setup_gcp_environment
+      ;;
     azure)
       setup_azure_environment
       ;;
@@ -68,6 +71,9 @@ fetch_secrets() {
   case "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}" in
     buildkite)
       fetch_buildkite_secrets
+      ;;
+    gcp)
+      fetch_gcp_secrets
       ;;
     azure)
       fetch_azure_secrets

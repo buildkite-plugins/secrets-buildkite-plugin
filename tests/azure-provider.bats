@@ -254,3 +254,29 @@ MOCK
   assert_output --partial "API_KEY=individual-secret-value"
   unstub az
 }
+
+@test "Azure: Fails on invalid base64 in env secret" {
+  export BUILDKITE_PLUGIN_SECRETS_ENV="batch-secrets"
+
+  stub az "keyvault secret show --vault-name my-vault --name batch-secrets --query value -o tsv : echo '!@#\$%^&*'"
+
+  run bash -c "$PWD/hooks/environment"
+
+  assert_failure
+  assert_output --partial "Failed to decode base64 secret"
+  unstub az
+}
+
+@test "Azure: Fails on whitespace-only decoded env secret" {
+  export WHITESPACE_B64
+  WHITESPACE_B64=$(printf '   \n' | base64)
+  export BUILDKITE_PLUGIN_SECRETS_ENV="batch-secrets"
+
+  stub az "keyvault secret show --vault-name my-vault --name batch-secrets --query value -o tsv : echo \${WHITESPACE_B64}"
+
+  run bash -c "$PWD/hooks/environment"
+
+  assert_failure
+  assert_output --partial "empty or contains only whitespace"
+  unstub az
+}
