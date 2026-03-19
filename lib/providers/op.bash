@@ -1,0 +1,176 @@
+#!/bin/bash
+
+setup_op_environment() {
+  check_dependencies
+
+  # Warn if no service account token is set and no active session exists
+  if [[ -z "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
+    if ! op account list --format=json >/dev/null 2>&1; then
+      log_error "No 1Password service account token found (OP_SERVICE_ACCOUNT_TOKEN) and no active op session"
+      log_info "Set OP_SERVICE_ACCOUNT_TOKEN or sign in with 'op signin' before running this plugin"
+      exit 1
+    fi
+  fi
+}
+
+op_secret_get_with_retry() {
+  local SECRET_REF="$1"
+  local MAX_ATTEMPTS="${BUILDKITE_PLUGIN_SECRETS_RETRY_MAX_ATTEMPTS:-5}"
+  local BASE_DELAY="${BUILDKITE_PLUGIN_SECRETS_RETRY_BASE_DELAY:-2}"
+  local ATTEMPT=1
+  local EXIT_CODE
+  local OUTPUT
+
+  while [ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]; do
+    local STDERR_TMP
+    STDERR_TMP=$(mktemp)
+    trap 'rm -f "$STDERR_TMP"' RETURN
+
+    set +e
+    OUTPUT=$(op read "${SECRET_REF}" 2>"$STDERR_TMP")
+    EXIT_CODE=$?
+    set -e
+
+    local STDERR_OUTPUT
+    STDERR_OUTPUT=$(cat "$STDERR_TMP")
+    rm -f "$STDERR_TMP"
+
+    if [ "$EXIT_CODE" -eq 0 ]; then
+      echo "$OUTPUT"
+      return 0
+    fi
+
+    # Non-retryable: item/vault not found, auth errors, invalid reference
+    if echo "$STDERR_OUTPUT" | grep -qiE "isn't an item in|isn't a vault|not found|unauthorized|forbidden|invalid secret reference|authentication required"; then
+      echo "$STDERR_OUTPUT" >&2
+      return "$EXIT_CODE"
+    fi
+
+    if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
+      local TOTAL_DELAY
+      TOTAL_DELAY=$(calculate_backoff_delay "$BASE_DELAY" "$ATTEMPT")
+
+      log_info "Failed to fetch secret ${SECRET_REF} (attempt ${ATTEMPT}/${MAX_ATTEMPTS}). Retrying in ${TOTAL_DELAY}s..."
+      echo "Error: $STDERR_OUTPUT" >&2
+
+      sleep "$TOTAL_DELAY"
+      ATTEMPT=$((ATTEMPT + 1))
+    else
+      log_error "Failed to fetch secret ${SECRET_REF} after ${MAX_ATTEMPTS} attempts"
+      echo "Error: $STDERR_OUTPUT" >&2
+      return "$EXIT_CODE"
+    fi
+  done
+}
+
+download_op_secret() {
+  local secret_ref="$1"
+
+  # Validate that the value looks like an op:// secret reference
+  if [[ ! "$secret_ref" =~ ^op://[^/]+/[^/]+/[^/]+ ]]; then
+    log_error "Invalid 1Password secret reference: '${secret_ref}' (must be in op://vault/item/field format)"
+    return 1
+  fi
+
+  local output
+  if output=$(op_secret_get_with_retry "${secret_ref}"); then
+    echo "${output}"
+  else
+    log_error "Failed to fetch 1Password secret: ${secret_ref}"
+    return 1
+  fi
+}
+
+process_op_secrets() {
+  local encoded_secret="$1"
+  local key_name="$2"
+  local decoded_secret
+  local key value
+
+  local decode_status=0
+  decoded_secret=$(echo "$encoded_secret" | base64 -d 2>/dev/null) || decode_status=$?
+
+  if [[ $decode_status -ne 0 ]] || [[ -z "$decoded_secret" ]]; then
+    log_error "Failed to decode base64 secret for key: ${key_name}"
+    log_error "The secret may be malformed or not properly base64-encoded"
+    return 1
+  fi
+
+  if [[ "$decoded_secret" =~ ^[[:space:]]+$ ]]; then
+    log_error "Decoded secret for key: ${key_name} is empty or contains only whitespace"
+    return 1
+  fi
+
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+
+    if [[ "$line" != *"="* ]]; then
+      log_warning "Skipping malformed line in secret '${key_name}': missing '=' separator"
+      continue
+    fi
+
+    key="${line%%=*}"
+    value="${line#*=}"
+
+    if [[ -n "$key" ]]; then
+      if [[ ! "$key" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+        log_warning "Skipping invalid variable name '${key}' in secret '${key_name}' (must start with letter or underscore)"
+        continue
+      fi
+
+      OP_SECRETS_TO_REDACT+=("$value")
+      export "$key=$value"
+    fi
+  done <<< "$decoded_secret"
+}
+
+process_op_variables() {
+  local key path value
+  for param in ${!BUILDKITE_PLUGIN_SECRETS_VARIABLES_*}; do
+    key="${param/BUILDKITE_PLUGIN_SECRETS_VARIABLES_/}"
+    path="${!param}"
+
+    if [[ ! "$key" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+      log_warning "Skipping invalid variable name '${key}'"
+      continue
+    fi
+
+    if ! value=$(download_op_secret "${path}"); then
+      log_error "Unable to find secret at ${path}"
+      exit 1
+    else
+      OP_SECRETS_TO_REDACT+=("$value")
+      export "$key=$value"
+    fi
+  done
+}
+
+fetch_op_secrets() {
+  local OP_SECRETS_TO_REDACT=()
+  local secret
+
+  # Disable debug tracing to prevent secret leaks
+  local xtrace_was_set=0
+  [[ -o xtrace ]] && xtrace_was_set=1
+  { set +x; } 2>/dev/null
+
+  log_info "Fetching 1Password secrets"
+
+  if [[ -n "${BUILDKITE_PLUGIN_SECRETS_ENV+x}" ]]; then
+    if secret=$(download_op_secret "${BUILDKITE_PLUGIN_SECRETS_ENV}"); then
+      process_op_secrets "${secret}" "${BUILDKITE_PLUGIN_SECRETS_ENV}"
+    else
+      log_error "No secret found at ${BUILDKITE_PLUGIN_SECRETS_ENV}"
+      if [[ $xtrace_was_set -eq 1 ]]; then set -x; else { set +x; } 2>/dev/null; fi
+      return 1
+    fi
+  fi
+
+  process_op_variables
+
+  if [[ "${BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION:-}" != "true" ]] && [[ ${#OP_SECRETS_TO_REDACT[@]} -gt 0 ]]; then
+    redact_secrets OP_SECRETS_TO_REDACT
+  fi
+
+  if [[ $xtrace_was_set -eq 1 ]]; then set -x; else { set +x; } 2>/dev/null; fi
+}

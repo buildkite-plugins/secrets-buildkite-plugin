@@ -61,6 +61,13 @@ check_dependencies() {
         log_info "Install: https://learn.microsoft.com/en-us/cli/azure/install-azure-cli"
       fi
       ;;
+    op)
+      if ! command_exists op; then
+        missing_deps+=("op")
+        log_error "1Password CLI (op) is required for 1Password secrets"
+        log_info "Install: https://developer.1password.com/docs/cli/get-started/"
+      fi
+      ;;
     *)
       unknown_provider "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
       ;;

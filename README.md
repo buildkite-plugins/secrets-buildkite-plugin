@@ -6,6 +6,7 @@ Supported providers:
 - [Buildkite Secrets](https://buildkite.com/docs/pipelines/security/secrets/buildkite-secrets) (default)
 - [GCP Secret Manager](https://cloud.google.com/secret-manager)
 - [Azure Key Vault](https://azure.microsoft.com/en-us/products/key-vault)
+- [1Password](https://1password.com/)
 
 ## Changes to consider when upgrading to `v2.0.0`
 
@@ -219,6 +220,66 @@ EOF
 az keyvault secret set --vault-name my-vault --name batch-secrets --value "$(base64 < data.txt)"
 ```
 
+## 1Password Provider
+
+Use `provider: op` to fetch secrets from [1Password](https://1password.com/) using the `op` CLI.
+
+### Prerequisites
+
+- The [1Password CLI](https://developer.1password.com/docs/cli/get-started/) (`op`) installed on your Buildkite agent
+- A [1Password Service Account](https://developer.1password.com/docs/service-accounts/) with read access to the relevant vaults. Set the `OP_SERVICE_ACCOUNT_TOKEN` environment variable on the agent (recommended for CI), or authenticate interactively with `op signin`.
+
+### Secret References
+
+All secret values must be specified as `op://` references in the format `op://vault/item/field`:
+
+- `vault` — the name or ID of your 1Password vault
+- `item` — the name or ID of the item within that vault
+- `field` — the field to read from the item (e.g. `password`, `credential`, or a custom field label)
+
+### Individual Variables
+
+Map environment variable names to `op://` secret references:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.1.0:
+          provider: op
+          variables:
+            API_KEY: op://my-vault/my-api-key/credential
+            DB_PASSWORD: op://my-vault/db-creds/password
+```
+
+### Batch Secrets (Base64)
+
+Store multiple `KEY=value` pairs in a single 1Password item field, base64-encoded, and use `env` to fetch and decode them all at once:
+
+```shell
+# Create a file with KEY=value pairs
+cat > data.txt <<EOF
+DB_HOST=mydb.example.com
+DB_PASSWORD=supersecret
+API_KEY=abc123
+EOF
+
+# Base64 encode and store as a 1Password item (e.g. in a "Password" or "Text" field)
+op item create --category=login --title="ci-batch-secrets" --vault=my-vault \
+  credential="$(base64 < data.txt)"
+```
+
+Then reference it in your pipeline:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.1.0:
+          provider: op
+          env: op://my-vault/ci-batch-secrets/credential
+```
+
 ## Combining Both Methods
 
 You can use `env` and `variables` together to fetch both batch and individual secrets in a single plugin call.
@@ -255,6 +316,19 @@ steps:
           env: batch-secrets
           variables:
             DEPLOY_KEY: deploy-key-secret
+```
+
+**1Password:**
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.1.0:
+          provider: op
+          env: op://my-vault/ci-batch-secrets/credential
+          variables:
+            DEPLOY_KEY: op://my-vault/deploy-key/credential
 ```
 
 ## Pinning a Secret Version (GCP)
@@ -303,7 +377,7 @@ These options apply to all providers.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `provider` | string | `buildkite` | The secrets provider to use. Supported values: `buildkite`, `gcp`, `azure`. |
+| `provider` | string | `buildkite` | The secrets provider to use. Supported values: `buildkite`, `gcp`, `azure`, `op`. |
 | `env` | string | - | Secret key name for fetching batch secrets (base64-encoded `KEY=value` format). |
 | `variables` | object | - | Map of `ENV_VAR_NAME: secret-path` pairs to inject as environment variables. |
 | `skip-redaction` | boolean | `false` | If `true`, secrets will not be automatically redacted from logs. |
@@ -327,6 +401,10 @@ These options only apply when `provider: azure` is set.
 |--------|------|---------|-------------|
 | `azure-vault-name` | string | - | The Azure Key Vault name (required when provider is azure). |
 | `azure-secret-version` | string | latest | The secret version to fetch. If not specified, the latest version is used. |
+
+### 1Password Provider Options
+
+The `op` provider has no additional plugin options. Authentication is handled via the `OP_SERVICE_ACCOUNT_TOKEN` environment variable on the agent, or an existing `op` session. All secret paths are specified directly as `op://vault/item/field` references in `env` and `variables`.
 
 ## Secret Redaction
 
