@@ -3,13 +3,22 @@
 setup_op_environment() {
   check_dependencies
 
-  # Warn if no service account token is set and no active session exists
-  if [[ -z "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
-    if ! op account list --format=json >/dev/null 2>&1; then
-      log_error "No 1Password service account token found (OP_SERVICE_ACCOUNT_TOKEN) and no active op session"
-      log_info "Set OP_SERVICE_ACCOUNT_TOKEN or sign in with 'op signin' before running this plugin"
-      exit 1
-    fi
+  # Accept any of the three supported auth methods:
+  #   1. Connect Server  (OP_CONNECT_HOST + OP_CONNECT_TOKEN)
+  #   2. Service account (OP_SERVICE_ACCOUNT_TOKEN)
+  #   3. Interactive session (op signin)
+  if [[ -n "${OP_CONNECT_HOST:-}" ]] && [[ -n "${OP_CONNECT_TOKEN:-}" ]]; then
+    return 0
+  fi
+
+  if [[ -n "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
+    return 0
+  fi
+
+  if ! op account list --format=json >/dev/null 2>&1; then
+    log_error "No 1Password authentication found"
+    log_info "Provide one of: OP_CONNECT_HOST+OP_CONNECT_TOKEN (Connect Server), OP_SERVICE_ACCOUNT_TOKEN (service account), or sign in with 'op signin'"
+    exit 1
   fi
 }
 

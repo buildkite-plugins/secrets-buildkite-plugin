@@ -227,7 +227,10 @@ Use `provider: op` to fetch secrets from [1Password](https://1password.com/) usi
 ### Prerequisites
 
 - The [1Password CLI](https://developer.1password.com/docs/cli/get-started/) (`op`) installed on your Buildkite agent
-- A [1Password Service Account](https://developer.1password.com/docs/service-accounts/) with read access to the relevant vaults. Set the `OP_SERVICE_ACCOUNT_TOKEN` environment variable on the agent (recommended for CI), or authenticate interactively with `op signin`.
+- One of the following authentication methods configured on the agent:
+  - **Connect Server** (recommended for self-hosted agents): set `OP_CONNECT_HOST` and `OP_CONNECT_TOKEN`
+  - **Service Account**: set `OP_SERVICE_ACCOUNT_TOKEN`
+  - **Interactive session**: sign in with `op signin` before the build runs
 
 ### Secret References
 
@@ -404,7 +407,7 @@ These options only apply when `provider: azure` is set.
 
 ### 1Password Provider Options
 
-The `op` provider has no additional plugin options. Authentication is handled via the `OP_SERVICE_ACCOUNT_TOKEN` environment variable on the agent, or an existing `op` session. All secret paths are specified directly as `op://vault/item/field` references in `env` and `variables`.
+The `op` provider has no additional plugin options. Authentication is handled via agent environment variables (`OP_CONNECT_HOST`+`OP_CONNECT_TOKEN` for Connect Server, or `OP_SERVICE_ACCOUNT_TOKEN` for service accounts) or an existing `op` session. All secret paths are specified directly as `op://vault/item/field` references in `env` and `variables`.
 
 ## Secret Redaction
 

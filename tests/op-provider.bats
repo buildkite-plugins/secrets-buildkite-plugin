@@ -53,19 +53,34 @@ EOF
   assert_output --partial "Missing required dependencies: op"
 }
 
-@test "1Password: Fails when no service account token and no active session" {
+@test "1Password: Fails when no auth credentials and no active session" {
   unset OP_SERVICE_ACCOUNT_TOKEN
 
   stub op \
     "account list --format=json : exit 1" \
     "* : exit 1"
 
-  run bash -c "unset OP_SERVICE_ACCOUNT_TOKEN; $PWD/hooks/environment"
+  run bash -c "unset OP_SERVICE_ACCOUNT_TOKEN; unset OP_CONNECT_HOST; unset OP_CONNECT_TOKEN; $PWD/hooks/environment"
 
   assert_failure
-  assert_output --partial "No 1Password service account token found"
+  assert_output --partial "No 1Password authentication found"
 
   unstub op || true
+}
+
+@test "1Password: Succeeds auth check with Connect Server credentials" {
+  unset OP_SERVICE_ACCOUNT_TOKEN
+  export OP_CONNECT_HOST="https://connect.example.com"
+  export OP_CONNECT_TOKEN="test-connect-token"
+  export BUILDKITE_PLUGIN_SECRETS_VARIABLES_API_KEY="op://my-vault/my-item/api-key"
+
+  stub op "read op://my-vault/my-item/api-key : echo connect-secret-value"
+
+  run bash -c "source $PWD/hooks/environment && echo API_KEY=\$API_KEY"
+
+  assert_success
+  assert_output --partial "API_KEY=connect-secret-value"
+  unstub op
 }
 
 @test "1Password: Download single variable" {
