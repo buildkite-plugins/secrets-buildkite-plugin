@@ -234,15 +234,19 @@ Use `provider: op` to fetch secrets from [1Password](https://1password.com/) usi
 
 ### Secret References
 
-All secret values must be specified as `op://` references in the format `op://vault/item/field`:
+Secrets can be specified in either short or full form:
 
+- **Short form**: `vault/item/field` — the `op://` prefix is added automatically
+- **Full form**: `op://vault/item/field` — explicit, useful when mixing with other tooling
+
+Where:
 - `vault` — the name or ID of your 1Password vault
 - `item` — the name or ID of the item within that vault
 - `field` — the field to read from the item (e.g. `password`, `credential`, or a custom field label)
 
 ### Individual Variables
 
-Map environment variable names to `op://` secret references:
+Map environment variable names to secret references:
 
 ```yaml
 steps:
@@ -251,8 +255,8 @@ steps:
       - secrets#v2.1.0:
           provider: op
           variables:
-            API_KEY: op://my-vault/my-api-key/credential
-            DB_PASSWORD: op://my-vault/db-creds/password
+            API_KEY: my-vault/my-api-key/credential
+            DB_PASSWORD: my-vault/db-creds/password
 ```
 
 ### Batch Secrets (Base64)
@@ -280,7 +284,7 @@ steps:
     plugins:
       - secrets#v2.1.0:
           provider: op
-          env: op://my-vault/ci-batch-secrets/credential
+          env: my-vault/ci-batch-secrets/credential
 ```
 
 ## Combining Both Methods
@@ -329,9 +333,9 @@ steps:
     plugins:
       - secrets#v2.1.0:
           provider: op
-          env: op://my-vault/ci-batch-secrets/credential
+          env: my-vault/ci-batch-secrets/credential
           variables:
-            DEPLOY_KEY: op://my-vault/deploy-key/credential
+            DEPLOY_KEY: my-vault/deploy-key/credential
 ```
 
 ## Pinning a Secret Version (GCP)

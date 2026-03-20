@@ -74,9 +74,14 @@ op_secret_get_with_retry() {
 download_op_secret() {
   local secret_ref="$1"
 
-  # Validate that the value looks like an op:// secret reference
+  # Prepend op:// if not already present, allowing short-form vault/item/field references
+  if [[ "$secret_ref" != op://* ]]; then
+    secret_ref="op://${secret_ref}"
+  fi
+
+  # Validate op:// secret reference has at least vault/item/field components
   if [[ ! "$secret_ref" =~ ^op://[^/]+/[^/]+/[^/]+ ]]; then
-    log_error "Invalid 1Password secret reference: '${secret_ref}' (must be in op://vault/item/field format)"
+    log_error "Invalid 1Password secret reference: '${1}' (must be vault/item/field or op://vault/item/field)"
     return 1
   fi
 

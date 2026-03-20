@@ -186,8 +186,20 @@ EOF
   unstub op
 }
 
+@test "1Password: Accepts short-form reference without op:// prefix" {
+  export BUILDKITE_PLUGIN_SECRETS_VARIABLES_API_KEY="my-vault/my-item/api-key"
+
+  stub op "read op://my-vault/my-item/api-key : echo secret-value-123"
+
+  run bash -c "source $PWD/hooks/environment && echo API_KEY=\$API_KEY"
+
+  assert_success
+  assert_output --partial "API_KEY=secret-value-123"
+  unstub op
+}
+
 @test "1Password: Rejects invalid secret references" {
-  export BUILDKITE_PLUGIN_SECRETS_VARIABLES_API_KEY="not-an-op-reference"
+  export BUILDKITE_PLUGIN_SECRETS_VARIABLES_API_KEY="not-enough-parts"
 
   cat <<'MOCK' > "$TEST_TEMP_DIR/op"
 #!/bin/bash
