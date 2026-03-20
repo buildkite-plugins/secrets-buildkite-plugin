@@ -170,9 +170,17 @@ redact_secrets() {
           # before assigning to a bash variable (bash warns and strips null bytes
           # when command substitution output contains them)
           if echo "${secret}${padding}" | base64 -d > "$decode_tmp" 2>/dev/null && [[ -s "$decode_tmp" ]]; then
-            # Skip if decoded value contains null bytes or other non-printable/binary data
-            if LC_ALL=C grep -qP '\x00' "$decode_tmp" 2>/dev/null || \
-               LC_ALL=C grep -q '[^[:print:][:space:]]' "$decode_tmp" 2>/dev/null; then
+            # Skip if decoded value contains null bytes — use tr/wc rather than grep
+            # because grep implementations vary in how they handle null bytes
+            local raw_size clean_size
+            raw_size=$(wc -c < "$decode_tmp")
+            clean_size=$(tr -d '\0' < "$decode_tmp" | wc -c)
+            if [[ "$raw_size" != "$clean_size" ]]; then
+              continue
+            fi
+
+            # Skip if decoded value contains other non-printable/binary data
+            if LC_ALL=C grep -q '[^[:print:][:space:]]' "$decode_tmp" 2>/dev/null; then
               continue
             fi
 
