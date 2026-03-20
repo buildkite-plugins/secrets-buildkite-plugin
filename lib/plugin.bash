@@ -61,6 +61,9 @@ setup_provider_environment() {
     azure)
       setup_azure_environment
       ;;
+    op)
+      setup_op_environment
+      ;;
     *)
       unknown_provider "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
       ;;
@@ -77,6 +80,9 @@ fetch_secrets() {
       ;;
     azure)
       fetch_azure_secrets
+      ;;
+    op)
+      fetch_op_secrets
       ;;
     *)
       unknown_provider "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"

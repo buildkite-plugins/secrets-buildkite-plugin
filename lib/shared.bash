@@ -61,6 +61,13 @@ check_dependencies() {
         log_info "Install: https://learn.microsoft.com/en-us/cli/azure/install-azure-cli"
       fi
       ;;
+    op)
+      if ! command_exists op; then
+        missing_deps+=("op")
+        log_error "1Password CLI (op) is required for 1Password secrets"
+        log_info "Install: https://developer.1password.com/docs/cli/get-started/"
+      fi
+      ;;
     *)
       unknown_provider "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
       ;;
@@ -155,11 +162,29 @@ redact_secrets() {
        if [[ ${#secret} -ge 4 ]] && [[ "$secret" =~ ^[A-Za-z0-9+/_-]+(={0,2})?$ ]]; then
         # Try decoding with different padding scenarios (standard, +1 pad, +2 pads)
         # This handles both padded and unpadded base64 strings
+        local decode_tmp raw_size clean_size
+        decode_tmp=$(mktemp)
+
         for padding in "" "=" "=="; do
-          if decoded=$(echo "${secret}${padding}" | base64 -d 2>/dev/null) && [[ -n "$decoded" ]]; then
-            # Skip if decoded value contains non-printable/binary data
-            # This prevents false positives where random strings decode to garbage
-            if ! LC_ALL=C grep -q '[^[:print:][:space:]]' <<< "$decoded" 2>/dev/null; then
+          # Decode to a temp file so we can check for binary/null-byte content
+          # before assigning to a bash variable (bash warns and strips null bytes
+          # when command substitution output contains them)
+          if echo "${secret}${padding}" | base64 -d > "$decode_tmp" 2>/dev/null && [[ -s "$decode_tmp" ]]; then
+            # Skip if decoded value contains null bytes — use tr/wc rather than grep
+            # because grep implementations vary in how they handle null bytes
+            raw_size=$(wc -c < "$decode_tmp")
+            clean_size=$(tr -d '\0' < "$decode_tmp" | wc -c)
+            if [[ "$raw_size" != "$clean_size" ]]; then
+              continue
+            fi
+
+            # Skip if decoded value contains other non-printable/binary data
+            if LC_ALL=C grep -q '[^[:print:][:space:]]' "$decode_tmp" 2>/dev/null; then
+              continue
+            fi
+
+            decoded=$(cat "$decode_tmp")
+            if [[ -n "$decoded" ]]; then
               # Validate with round-trip: encode the decoded value and check if it matches
               # Check both with and without trailing newline as different base64 implementations vary
               local reencoded_with_newline reencoded_without_newline
@@ -181,6 +206,8 @@ redact_secrets() {
             fi
           fi
         done
+
+        rm -f "$decode_tmp"
       fi
 
       # Only redact if we successfully validated it's real base64 and decoded value differs from original
