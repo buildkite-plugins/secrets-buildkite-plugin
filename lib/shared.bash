@@ -162,7 +162,7 @@ redact_secrets() {
        if [[ ${#secret} -ge 4 ]] && [[ "$secret" =~ ^[A-Za-z0-9+/_-]+(={0,2})?$ ]]; then
         # Try decoding with different padding scenarios (standard, +1 pad, +2 pads)
         # This handles both padded and unpadded base64 strings
-        local decode_tmp
+        local decode_tmp raw_size clean_size
         decode_tmp=$(mktemp)
 
         for padding in "" "=" "=="; do
@@ -172,7 +172,6 @@ redact_secrets() {
           if echo "${secret}${padding}" | base64 -d > "$decode_tmp" 2>/dev/null && [[ -s "$decode_tmp" ]]; then
             # Skip if decoded value contains null bytes — use tr/wc rather than grep
             # because grep implementations vary in how they handle null bytes
-            local raw_size clean_size
             raw_size=$(wc -c < "$decode_tmp")
             clean_size=$(tr -d '\0' < "$decode_tmp" | wc -c)
             if [[ "$raw_size" != "$clean_size" ]]; then

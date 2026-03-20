@@ -31,6 +31,7 @@ teardown() {
 @test "1Password: Fails when op CLI is missing" {
   local tmp
   tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' RETURN
 
   cat <<'EOF' >"$tmp/dirname"
 #!/bin/bash
@@ -55,12 +56,12 @@ EOF
 
 @test "1Password: Fails when no auth credentials and no active session" {
   unset OP_SERVICE_ACCOUNT_TOKEN
+  unset OP_CONNECT_HOST
+  unset OP_CONNECT_TOKEN
 
-  stub op \
-    "account list --format=json : exit 1" \
-    "* : exit 1"
+  stub op "account list --format=json : exit 1"
 
-  run bash -c "unset OP_SERVICE_ACCOUNT_TOKEN; unset OP_CONNECT_HOST; unset OP_CONNECT_TOKEN; $PWD/hooks/environment"
+  run bash -c "$PWD/hooks/environment"
 
   assert_failure
   assert_output --partial "No 1Password authentication found"

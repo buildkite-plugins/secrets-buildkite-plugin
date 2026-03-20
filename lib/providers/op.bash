@@ -29,28 +29,27 @@ op_secret_get_with_retry() {
   local ATTEMPT=1
   local EXIT_CODE
   local OUTPUT
+  local STDERR_TMP
+  local STDERR_OUTPUT
+  STDERR_TMP=$(mktemp)
+  trap 'rm -f "$STDERR_TMP"' RETURN
 
   while [ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]; do
-    local STDERR_TMP
-    STDERR_TMP=$(mktemp)
-    trap 'rm -f "$STDERR_TMP"' RETURN
-
     set +e
     OUTPUT=$(op read "${SECRET_REF}" 2>"$STDERR_TMP")
     EXIT_CODE=$?
     set -e
 
-    local STDERR_OUTPUT
     STDERR_OUTPUT=$(cat "$STDERR_TMP")
-    rm -f "$STDERR_TMP"
+    : > "$STDERR_TMP"
 
     if [ "$EXIT_CODE" -eq 0 ]; then
       echo "$OUTPUT"
       return 0
     fi
 
-    # Non-retryable: item/vault not found, auth errors, invalid reference
-    if echo "$STDERR_OUTPUT" | grep -qiE "isn't an item in|isn't a vault|not found|unauthorized|forbidden|invalid secret reference|authentication required"; then
+    # Non-retryable: item/vault not found, auth errors, invalid reference format
+    if echo "$STDERR_OUTPUT" | grep -qiE "isn't an item in|isn't a vault|unauthorized|forbidden|invalid secret reference|authentication required"; then
       echo "$STDERR_OUTPUT" >&2
       return "$EXIT_CODE"
     fi
