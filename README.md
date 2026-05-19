@@ -306,6 +306,7 @@ These options apply to all providers.
 | `provider` | string | `buildkite` | The secrets provider to use. Supported values: `buildkite`, `gcp`, `azure`. |
 | `env` | string | - | Secret key name for fetching batch secrets (base64-encoded `KEY=value` format). |
 | `variables` | object | - | Map of `ENV_VAR_NAME: secret-path` pairs to inject as environment variables. |
+| `mute-log` | boolean | `true` | If `true` (default), the "Fetching secrets" header renders as a de-emphasized `~~~` group. Set to `false` to use the bold `---` style. |
 | `skip-redaction` | boolean | `false` | If `true`, secrets will not be automatically redacted from logs. |
 | `retry-max-attempts` | number | `5` | Maximum retry attempts for transient failures. |
 | `retry-base-delay` | number | `2` | Base delay in seconds for exponential backoff between retries. |
