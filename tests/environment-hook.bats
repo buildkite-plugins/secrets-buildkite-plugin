@@ -10,6 +10,35 @@ setup() {
   export BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION=true
 }
 
+@test "Uses muted header (~~~) by default" {
+    export TESTDATA='Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK'
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+
+    stub buildkite-agent "secret get env : echo ${TESTDATA}"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_success
+    assert_output --partial "~~~ :closed_lock_with_key: Fetching secrets"
+    refute_output --partial "--- :closed_lock_with_key: Fetching secrets"
+    unstub buildkite-agent
+}
+
+@test "Uses bold header (---) when mute-log is false" {
+    export TESTDATA='Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK'
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+    export BUILDKITE_PLUGIN_SECRETS_MUTE_LOG=false
+
+    stub buildkite-agent "secret get env : echo ${TESTDATA}"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_success
+    assert_output --partial "--- :closed_lock_with_key: Fetching secrets"
+    refute_output --partial "~~~ :closed_lock_with_key: Fetching secrets"
+    unstub buildkite-agent
+}
+
 @test "Fails when buildkite-agent is missing" {
     local tmp
     tmp=$(mktemp -d)

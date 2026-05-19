@@ -14,7 +14,11 @@ else
 fi
 
 main() {
-  echo "--- :closed_lock_with_key: Fetching secrets"
+  local log_prefix="~~~"
+  if [[ "${BUILDKITE_PLUGIN_SECRETS_MUTE_LOG:-true}" == "false" ]]; then
+    log_prefix="---"
+  fi
+  echo "${log_prefix} :closed_lock_with_key: Fetching secrets"
 
   log_info "Using secrets provider ${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
 

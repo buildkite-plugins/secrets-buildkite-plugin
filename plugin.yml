@@ -24,6 +24,10 @@ configuration:
     variables:
       type: object
       description: "Map of ENV_VAR_NAME: secret-path for individual secrets"
+    mute-log:
+      type: boolean
+      default: true
+      description: "If true (default), the 'Fetching secrets' log header uses '~~~' (de-emphasized). Set to false to use '---' (bold)."
     skip-redaction:
       type: boolean
       default: false
