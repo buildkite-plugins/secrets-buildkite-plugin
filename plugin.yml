@@ -9,7 +9,7 @@ configuration:
   properties:
     provider:
       type: string
-      enum: ["buildkite", "gcp", "azure"]
+      enum: ["buildkite", "gcp", "azure", "op"]
       default: "buildkite"
       description: "The secrets provider to use."
     azure-vault-name:
