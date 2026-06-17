@@ -61,6 +61,18 @@ check_dependencies() {
         log_info "Install: https://learn.microsoft.com/en-us/cli/azure/install-azure-cli"
       fi
       ;;
+    aws)
+      if ! command_exists aws; then
+        missing_deps+=("aws")
+        log_error "AWS CLI (aws) is required for AWS Secrets Manager"
+        log_info "Install: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
+      fi
+      if [[ -n "${BUILDKITE_PLUGIN_SECRETS_JSON_VARIABLES_0_SECRET_ID:-}" ]] && ! command_exists jq; then
+        missing_deps+=("jq")
+        log_error "jq is required when using json-variables with AWS Secrets Manager"
+        log_info "Install: https://jqlang.github.io/jq/download/"
+      fi
+      ;;
     op)
       if ! command_exists op; then
         missing_deps+=("op")

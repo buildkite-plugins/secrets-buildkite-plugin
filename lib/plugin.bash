@@ -20,6 +20,19 @@ plugin_read_config() {
       break
     fi
   done
+
+  # Export json-variables array of { secret-id, json-key } objects
+  # (AWS provider: expand a secret's JSON content into env vars, one per key)
+  for ((i=0; ; i++)); do
+    local secret_id_var="BUILDKITE_PLUGIN_SECRETS_JSON_VARIABLES_${i}_SECRET_ID"
+    if [[ -n "${!secret_id_var:-}" ]]; then
+      export "BUILDKITE_PLUGIN_SECRETS_JSON_VARIABLES_${i}_SECRET_ID"
+      local json_key_var="BUILDKITE_PLUGIN_SECRETS_JSON_VARIABLES_${i}_JSON_KEY"
+      [[ -n "${!json_key_var:-}" ]] && export "BUILDKITE_PLUGIN_SECRETS_JSON_VARIABLES_${i}_JSON_KEY"
+    else
+      break
+    fi
+  done
 }
 
 # Load shared utilities
@@ -61,6 +74,9 @@ setup_provider_environment() {
     azure)
       setup_azure_environment
       ;;
+    aws)
+      setup_aws_environment
+      ;;
     op)
       setup_op_environment
       ;;
@@ -80,6 +96,9 @@ fetch_secrets() {
       ;;
     azure)
       fetch_azure_secrets
+      ;;
+    aws)
+      fetch_aws_secrets
       ;;
     op)
       fetch_op_secrets

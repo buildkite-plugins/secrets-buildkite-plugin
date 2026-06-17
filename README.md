@@ -6,6 +6,7 @@ Supported providers:
 - [Buildkite Secrets](https://buildkite.com/docs/pipelines/security/secrets/buildkite-secrets) (default)
 - [GCP Secret Manager](https://cloud.google.com/secret-manager)
 - [Azure Key Vault](https://azure.microsoft.com/en-us/products/key-vault)
+- [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/)
 - [1Password](https://1password.com/)
 
 ## Changes to consider when upgrading to `v2.0.0`
@@ -220,6 +221,128 @@ EOF
 az keyvault secret set --vault-name my-vault --name batch-secrets --value "$(base64 < data.txt)"
 ```
 
+## AWS Secrets Manager Provider
+
+Use `provider: aws` to fetch secrets from [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/).
+
+### Prerequisites
+
+- The [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) (`aws`) installed on your Buildkite agent.
+- The agent must be authenticated to AWS with permissions to call `secretsmanager:GetSecretValue` on the relevant secrets (e.g. via instance profile, an OIDC-based plugin, or static credentials in the environment).
+- [jq](https://jqlang.github.io/jq/) installed on the agent if you use `json-variables` (see below).
+
+### AWS Region Configuration
+
+The AWS region is resolved in this order:
+
+1. The `aws-region` plugin option
+2. The AWS CLI's configured region (e.g. `AWS_REGION`, `AWS_DEFAULT_REGION`, or the agent's instance/profile configuration)
+
+### Individual Variables
+
+Create secrets in AWS Secrets Manager, then map them to environment variables:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.2.0:
+          provider: aws
+          aws-region: us-east-1
+          variables:
+            API_KEY: my-api-key-secret
+            DB_PASSWORD: my-db-password-secret
+```
+
+Each key under `variables` becomes the environment variable name, and the value is the AWS secret name or ARN to fetch.
+
+### Batch (Base64-Encoded)
+
+Store multiple `KEY=value` pairs in a single AWS secret, base64-encoded:
+
+```shell
+# Create a file with your variables
+cat > secrets.txt <<EOF
+API_KEY=sk-abc123
+DB_HOST=db.example.com
+DB_PASSWORD=supersecret
+EOF
+
+# Base64-encode and store in AWS Secrets Manager
+aws secretsmanager create-secret --name ci-env-secrets --secret-string "$(base64 < secrets.txt)"
+```
+
+Then reference the secret in your pipeline:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.2.0:
+          provider: aws
+          aws-region: us-east-1
+          env: "ci-env-secrets"
+```
+
+### JSON Secrets as Environment Variables (`json-variables`)
+
+AWS Secrets Manager commonly stores secrets as a single JSON object (e.g. `{"username": "admin", "password": "supersecret"}`). Use `json-variables` to expand the keys of a JSON object directly into environment variables, without needing to base64-encode anything or invoke `jq` yourself:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.2.0:
+          provider: aws
+          aws-region: us-east-1
+          json-variables:
+            - secret-id: rds/my-database-credentials
+```
+
+If `rds/my-database-credentials` resolves to:
+
+```json
+{
+  "username": "admin",
+  "password": "supersecret",
+  "port": 5432
+}
+```
+
+Then `username`, `password`, and `port` are each exported as environment variables.
+
+Each entry takes:
+
+- `secret-id` (required) — the AWS secret name or ARN to fetch.
+- `json-key` (optional, default `.`) — a [`jq`](https://jqlang.github.io/jq/manual/) path into the secret's JSON content to expand. Use this when the keys you want live under a nested object rather than at the root:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.2.0:
+          provider: aws
+          aws-region: us-east-1
+          json-variables:
+            - secret-id: my-secret-id
+              json-key: ".Variables"
+```
+
+With a secret called `my-secret-id` containing:
+
+```json
+{
+  "Variables": {
+    "MY_SECRET": "value",
+    "MY_OTHER_SECRET": "other value"
+  }
+}
+```
+
+This sets the `MY_SECRET` and `MY_OTHER_SECRET` environment variables.
+
+Only keys with string, number, or boolean values are expanded — nested objects/arrays are skipped. Keys are sanitized into valid shell variable names by replacing any character that isn't a letter, digit, or underscore with `_`, and prefixing the result with `_` if it would otherwise start with a digit (e.g. `My-great key!` becomes `My_great_key_`).
+
 ## 1Password Provider
 
 Use `provider: op` to fetch secrets from [1Password](https://1password.com/) using the `op` CLI.
@@ -252,7 +375,7 @@ Map environment variable names to secret references:
 steps:
   - command: build.sh
     plugins:
-      - secrets#v2.1.0:
+      - secrets#v2.2.0:
           provider: op
           variables:
             API_KEY: my-vault/my-api-key/credential
@@ -282,7 +405,7 @@ Then reference it in your pipeline:
 steps:
   - command: build.sh
     plugins:
-      - secrets#v2.1.0:
+      - secrets#v2.2.0:
           provider: op
           env: my-vault/ci-batch-secrets/credential
 ```
@@ -325,13 +448,29 @@ steps:
             DEPLOY_KEY: deploy-key-secret
 ```
 
+**AWS:**
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.2.0:
+          provider: aws
+          aws-region: us-east-1
+          env: "ci-env-secrets"
+          variables:
+            DEPLOY_KEY: deploy-key-secret
+          json-variables:
+            - secret-id: rds/my-database-credentials
+```
+
 **1Password:**
 
 ```yaml
 steps:
   - command: build.sh
     plugins:
-      - secrets#v2.1.0:
+      - secrets#v2.2.0:
           provider: op
           env: my-vault/ci-batch-secrets/credential
           variables:
@@ -376,6 +515,36 @@ steps:
             API_KEY: my-api-key
 ```
 
+## Pinning a Secret Version (AWS)
+
+By default, the `AWSCURRENT` staged version of each secret is fetched. To pin to a specific version:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.2.0:
+          provider: aws
+          aws-region: us-east-1
+          aws-secret-version-id: "EXAMPLE1-90ab-cdef-fedc-ba987EXAMPLE"
+          variables:
+            API_KEY: my-api-key-secret
+```
+
+Or pin to a staging label (e.g. `AWSPREVIOUS`) with `aws-secret-version-stage`:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.2.0:
+          provider: aws
+          aws-region: us-east-1
+          aws-secret-version-stage: "AWSPREVIOUS"
+          variables:
+            API_KEY: my-api-key-secret
+```
+
 ## Options
 
 ### Common Options
@@ -384,9 +553,10 @@ These options apply to all providers.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `provider` | string | `buildkite` | The secrets provider to use. Supported values: `buildkite`, `gcp`, `azure`, `op`. |
+| `provider` | string | `buildkite` | The secrets provider to use. Supported values: `buildkite`, `gcp`, `azure`, `aws`, `op`. |
 | `env` | string | - | Secret key name for fetching batch secrets (base64-encoded `KEY=value` format). |
 | `variables` | object | - | Map of `ENV_VAR_NAME: secret-path` pairs to inject as environment variables. |
+| `json-variables` | array | - | List of `{ secret-id, json-key }` objects (AWS only). Expands the JSON object at `json-key` (a jq path, default `.`) within each secret into one environment variable per key. |
 | `mute-log` | boolean | `true` | If `true` (default), the "Fetching secrets" header renders as a de-emphasized `~~~` group. Set to `false` to use the bold `---` style. |
 | `skip-redaction` | boolean | `false` | If `true`, secrets will not be automatically redacted from logs. |
 | `retry-max-attempts` | number | `5` | Maximum retry attempts for transient failures. |
@@ -409,6 +579,16 @@ These options only apply when `provider: azure` is set.
 |--------|------|---------|-------------|
 | `azure-vault-name` | string | - | The Azure Key Vault name (required when provider is azure). |
 | `azure-secret-version` | string | latest | The secret version to fetch. If not specified, the latest version is used. |
+
+### AWS Provider Options
+
+These options only apply when `provider: aws` is set.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `aws-region` | string | - | AWS region to fetch secrets from. Falls back to the AWS CLI's configured region. |
+| `aws-secret-version-id` | string | - | The Secrets Manager version ID to fetch. Defaults to the `AWSCURRENT` staged version. |
+| `aws-secret-version-stage` | string | - | The Secrets Manager staging label to fetch (e.g. `AWSPREVIOUS`). Defaults to `AWSCURRENT`. |
 
 ### 1Password Provider Options
 
