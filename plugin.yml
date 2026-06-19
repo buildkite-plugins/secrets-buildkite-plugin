@@ -48,4 +48,16 @@ configuration:
       type: string
       default: "latest"
       description: "Secret version to fetch (default: latest)"
+    git-credentials:
+      type: string
+      description: "Secret key or path, which value is a git credentials file entry"
+    git-credentials-file:
+      type: string
+      description: "Path to write the fetched git credentials to. Defaults to a job specific temporary file."
+    git-ssh-key:
+      type: string
+      description: "Secret key or path, which value is an SSH private key."
+    git-ssh-known-hosts:
+      type: string
+      description: "Override the default known_hosts file for SSH. Defaults to GitHub."
   additionalProperties: false
