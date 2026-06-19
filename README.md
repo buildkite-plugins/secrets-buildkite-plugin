@@ -252,7 +252,7 @@ Map environment variable names to secret references:
 steps:
   - command: build.sh
     plugins:
-      - secrets#v2.1.0:
+      - secrets#v2.2.0:
           provider: op
           variables:
             API_KEY: my-vault/my-api-key/credential
@@ -282,7 +282,7 @@ Then reference it in your pipeline:
 steps:
   - command: build.sh
     plugins:
-      - secrets#v2.1.0:
+      - secrets#v2.2.0:
           provider: op
           env: my-vault/ci-batch-secrets/credential
 ```
@@ -331,7 +331,7 @@ steps:
 steps:
   - command: build.sh
     plugins:
-      - secrets#v2.1.0:
+      - secrets#v2.2.0:
           provider: op
           env: my-vault/ci-batch-secrets/credential
           variables:
