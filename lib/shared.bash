@@ -290,7 +290,7 @@ decode_if_base64() {
 
 validate_git_auth_config() {
   if [[ -n "${BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS:-}" && -n "${BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY:-}" ]]; then
-    log_error "Only one of git-credentials or git-ssh-key can be configured. Choose one method for git authentication to avoid conflicts."
+    log_error "git-credentials and git-ssh-key are mutually exclusive. Configure one git auth method per step."
     exit 1
   fi
 }
