@@ -8,24 +8,15 @@ setup() {
   export BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION=true
 
   TEST_TEMP_DIR=$(mktemp -d)
-  # The SSH key/known_hosts file paths derive from TMPDIR + job id
   export TMPDIR="$TEST_TEMP_DIR"
   unset BUILDKITE_JOB_ID
   SSH_KEY_FILE="$TEST_TEMP_DIR/buildkite-secrets-git-ssh-key"
   KNOWN_HOSTS_FILE="$TEST_TEMP_DIR/buildkite-secrets-git-ssh-known-hosts"
 
-  # Stand-in binaries so dependency checks pass when we don't stub them. The
-  # plugin never executes ssh here (git is stubbed), it only checks ssh exists.
-  # Appended to the end of PATH so bats-mock stubs take precedence.
-  cat <<'EOF' >"$TEST_TEMP_DIR/buildkite-agent"
-#!/bin/bash
-exit 0
-EOF
-  cat <<'EOF' >"$TEST_TEMP_DIR/ssh"
-#!/bin/bash
-exit 0
-EOF
-  chmod +x "$TEST_TEMP_DIR/buildkite-agent" "$TEST_TEMP_DIR/ssh"
+  printf '#!/bin/bash\nexit 0\n' >"$TEST_TEMP_DIR/buildkite-agent"
+  printf '#!/bin/bash\nexit 0\n' >"$TEST_TEMP_DIR/git"
+  printf '#!/bin/bash\nexit 0\n' >"$TEST_TEMP_DIR/ssh"
+  chmod +x "$TEST_TEMP_DIR/buildkite-agent" "$TEST_TEMP_DIR/git" "$TEST_TEMP_DIR/ssh"
   export PATH="$PATH:$TEST_TEMP_DIR"
 }
 
@@ -33,35 +24,34 @@ teardown() {
   rm -rf "$TEST_TEMP_DIR"
 }
 
-@test "Writes SSH key and configures core.sshCommand with GitHub known_hosts (buildkite provider)" {
+@test "Writes SSH key and injects core.sshCommand with GitHub known_hosts (buildkite provider)" {
   export BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY="deploy-key"
 
   stub buildkite-agent "secret get deploy-key : echo 'ssh-key:FAKEDATA'"
-  stub git "config --global core.sshCommand * : echo \"git \$*\" > '$TEST_TEMP_DIR/git.log'"
 
-  run bash -c "$PWD/hooks/environment"
+  run bash -c "source $PWD/hooks/environment; env | grep '^GIT_CONFIG_'"
 
   assert_success
   assert_output --partial "Configured git SSH key"
+  assert_output --partial "GIT_CONFIG_KEY_0=core.sshCommand"
+  assert_output --partial "GIT_CONFIG_VALUE_0=ssh -F /dev/null -i '$SSH_KEY_FILE'"
+  assert_output --partial "IdentityAgent=none"
+  assert_output --partial "BatchMode=yes"
+  assert_output --partial "UserKnownHostsFile='$KNOWN_HOSTS_FILE'"
+  assert_output --partial "StrictHostKeyChecking=yes"
 
-  # The fetched key is written verbatim to a private file
   assert [ -f "$SSH_KEY_FILE" ]
   run cat "$SSH_KEY_FILE"
   assert_output "ssh-key:FAKEDATA"
 
-  # known_hosts defaults to GitHub's published host keys
+  run bash -c "stat -c '%a' '$SSH_KEY_FILE' 2>/dev/null || stat -f '%Lp' '$SSH_KEY_FILE'"
+  assert_output "600"
+
   assert [ -f "$KNOWN_HOSTS_FILE" ]
   run cat "$KNOWN_HOSTS_FILE"
   assert_output --partial "github.com ssh-ed25519"
 
-  # git is pointed at the key + known_hosts, with verification left on
-  run cat "$TEST_TEMP_DIR/git.log"
-  assert_output --partial "core.sshCommand ssh -i $SSH_KEY_FILE"
-  assert_output --partial "UserKnownHostsFile=$KNOWN_HOSTS_FILE"
-  assert_output --partial "StrictHostKeyChecking=yes"
-
   unstub buildkite-agent
-  unstub git
 }
 
 @test "Uses custom known_hosts when git-ssh-known-hosts is provided" {
@@ -69,7 +59,6 @@ teardown() {
   export BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KNOWN_HOSTS="git.internal.example.com ssh-ed25519 AAAACustomHostKey"
 
   stub buildkite-agent "secret get deploy-key : echo 'ssh-key:FAKEDATA'"
-  stub git "config --global core.sshCommand * : exit 0"
 
   run bash -c "$PWD/hooks/environment"
 
@@ -80,7 +69,6 @@ teardown() {
   refute_output --partial "github.com"
 
   unstub buildkite-agent
-  unstub git
 }
 
 @test "Fails when git is missing and git-ssh-key is set" {
@@ -105,13 +93,12 @@ EOF
   rm -rf "$tmp"
 }
 
-@test "Configures SSH key via the gcp provider" {
+@test "Injects SSH key via the gcp provider" {
   export BUILDKITE_PLUGIN_SECRETS_PROVIDER=gcp
   export BUILDKITE_PLUGIN_SECRETS_GCP_PROJECT=test-project
   export BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY="deploy-key"
 
   stub gcloud "secrets versions access latest --secret=deploy-key --project=test-project : echo 'ssh-key:FAKEDATA'"
-  stub git "config --global core.sshCommand * : exit 0"
 
   run bash -c "$PWD/hooks/environment"
 
@@ -121,7 +108,6 @@ EOF
   assert_output "ssh-key:FAKEDATA"
 
   unstub gcloud
-  unstub git
 }
 
 @test "Redacts the fetched SSH key" {
@@ -132,7 +118,6 @@ EOF
     "secret get deploy-key : echo 'ssh-key:FAKEDATA'" \
     "redactor add --help : echo usage && exit 0" \
     "redactor add : cat"
-  stub git "config --global core.sshCommand * : exit 0"
 
   run bash -c "$PWD/hooks/environment"
 
@@ -140,7 +125,6 @@ EOF
   assert_output --partial "Redacting"
 
   unstub buildkite-agent
-  unstub git
 }
 
 @test "Fails when both git-credentials and git-ssh-key are set" {
@@ -163,7 +147,6 @@ FAKEKEYBODY
   b64="$(printf '%s' "$key" | base64 | tr -d '\n')"
 
   stub buildkite-agent "secret get deploy-key : echo $b64"
-  stub git "config --global core.sshCommand * : exit 0"
 
   run bash -c "$PWD/hooks/environment"
 
@@ -172,7 +155,81 @@ FAKEKEYBODY
   assert_output "$key"
 
   unstub buildkite-agent
-  unstub git
+}
+
+@test "Fails when ssh is missing and git-ssh-key is set" {
+  local tmp
+  tmp=$(mktemp -d)
+
+  cat <<'EOF' >"$tmp/dirname"
+#!/bin/bash
+/usr/bin/dirname "$@"
+EOF
+  cat <<'EOF' >"$tmp/buildkite-agent"
+#!/bin/bash
+exit 0
+EOF
+  cat <<'EOF' >"$tmp/git"
+#!/bin/bash
+exit 0
+EOF
+  chmod +x "$tmp/dirname" "$tmp/buildkite-agent" "$tmp/git"
+
+  run env PATH="$tmp" BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY=deploy-key /bin/bash -c "$PWD/hooks/environment"
+
+  assert_failure
+  assert_output --partial "ssh is required when using the git-ssh-key option"
+
+  rm -rf "$tmp"
+}
+
+@test "Leaves a base64-looking key unchanged when it lacks a private-key header" {
+  export BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY="deploy-key"
+  stub buildkite-agent "secret get deploy-key : echo dXNlcg=="
+
+  run bash -c "$PWD/hooks/environment"
+
+  assert_success
+  run cat "$SSH_KEY_FILE"
+  assert_output "dXNlcg=="
+
+  unstub buildkite-agent
+}
+
+@test "Empty SSH key secret is rejected" {
+  export BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY="deploy-key"
+  stub buildkite-agent "secret get deploy-key : printf ''"
+
+  run bash -c "$PWD/hooks/environment"
+
+  assert_failure
+  assert_output --partial "is empty"
+  assert [ ! -f "$SSH_KEY_FILE" ]
+
+  unstub buildkite-agent
+}
+
+@test "Strips carriage returns from a CRLF-stored SSH key" {
+  export BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY="deploy-key"
+  stub buildkite-agent "secret get deploy-key : printf -- '-----BEGIN OPENSSH PRIVATE KEY-----\r\nBODY\r\n-----END OPENSSH PRIVATE KEY-----\r\n'"
+
+  run bash -c "$PWD/hooks/environment"
+
+  assert_success
+  run cat "$SSH_KEY_FILE"
+  refute_output --partial $'\r'
+  assert_output --partial "BEGIN OPENSSH PRIVATE KEY"
+
+  unstub buildkite-agent
+}
+
+@test "pre-exit is a no-op when the SSH files are absent" {
+  export BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY="deploy-key"
+
+  run bash -c "$PWD/hooks/pre-exit"
+
+  assert_success
+  refute_output --partial "Removed git SSH key files"
 }
 
 @test "pre-exit removes the SSH key and known_hosts files" {
