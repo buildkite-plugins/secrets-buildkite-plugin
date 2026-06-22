@@ -298,7 +298,8 @@ git_credentials_file() {
   if [[ -n "${BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS_FILE:-}" ]]; then
     echo "${BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS_FILE}"
   else
-    echo "${TMPDIR:-/tmp}/buildkite-secrets-git-credentials${BUILDKITE_JOB_ID:+-${BUILDKITE_JOB_ID}}"
+    local dir="${TMPDIR:-/tmp}"
+    echo "${dir%/}/buildkite-secrets-git-credentials${BUILDKITE_JOB_ID:+-${BUILDKITE_JOB_ID}}"
   fi
 }
 
@@ -467,11 +468,13 @@ github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCj7ndNxQowgcQnjshcLrqPEiiphnt+V
 
 # Written by the environment hook and removed by pre-exit.
 git_ssh_key_file() {
-  echo "${TMPDIR:-/tmp}/buildkite-secrets-git-ssh-key${BUILDKITE_JOB_ID:+-${BUILDKITE_JOB_ID}}"
+  local dir="${TMPDIR:-/tmp}"
+  echo "${dir%/}/buildkite-secrets-git-ssh-key${BUILDKITE_JOB_ID:+-${BUILDKITE_JOB_ID}}"
 }
 
 git_ssh_known_hosts_file() {
-  echo "${TMPDIR:-/tmp}/buildkite-secrets-git-ssh-known-hosts${BUILDKITE_JOB_ID:+-${BUILDKITE_JOB_ID}}"
+  local dir="${TMPDIR:-/tmp}"
+  echo "${dir%/}/buildkite-secrets-git-ssh-known-hosts${BUILDKITE_JOB_ID:+-${BUILDKITE_JOB_ID}}"
 }
 
 # Configures core.sshCommand to use the fetched key, keeping host-key
