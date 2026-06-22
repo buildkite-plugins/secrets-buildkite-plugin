@@ -282,7 +282,6 @@ decode_if_base64() {
     result="$value"
   fi
 
-  # Set value to base64 -d output, or the original if it's not b64
   printf '%s' "$result"
 
   if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
@@ -299,7 +298,7 @@ git_credentials_file() {
   if [[ -n "${BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS_FILE:-}" ]]; then
     echo "${BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS_FILE}"
   else
-    echo "${TMPDIR:-/tmp}/buildkite-secrets-git-credentials-${BUILDKITE_JOB_ID:+-${BUILDKITE_JOB_ID}}"
+    echo "${TMPDIR:-/tmp}/buildkite-secrets-git-credentials${BUILDKITE_JOB_ID:+-${BUILDKITE_JOB_ID}}"
   fi
 }
 
@@ -308,7 +307,10 @@ git_credentials_file() {
 git_config_env_add() {
   local n="${GIT_CONFIG_COUNT:-0}"
 
-  [[ "$n" =~ ^[0-9]+$ ]] || n=0
+  if [[ ! "$n" =~ ^[0-9]+$ ]]; then
+    log_warning "Ignoring non-numeric inherited GIT_CONFIG_COUNT '${n}'"
+    n=0
+  fi
 
   export "GIT_CONFIG_KEY_${n}=$1"
   export "GIT_CONFIG_VALUE_${n}=$2"
@@ -336,8 +338,12 @@ write_secret_file() {
     printf '%s\n' "$content" >"$src" || rc=1
   fi
 
-  if [[ $rc -eq 0 ]] && ! mv -f "$src" "$dest" 2>/dev/null; then
-    rc=1
+  if [[ $rc -eq 0 ]]; then
+    if mv -f "$src" "$dest" 2>/dev/null; then
+      src=""   # moved into place, no temp left to clean up
+    else
+      rc=1
+    fi
   fi
 
   if [[ $rc -eq 0 && ( ! -f "$dest" || -L "$dest" ) ]]; then rc=1; fi
@@ -393,7 +399,6 @@ configure_git_credentials() {
 
   if ! creds=$(provider_download_secret "$key"); then
     log_error "Unable to fetch git-credentials secret at ${key}"
-    if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
     exit 1
   fi
 
@@ -405,7 +410,6 @@ configure_git_credentials() {
 
   if [[ -z "${creds_value//[[:space:]]/}" ]]; then
     log_error "git-credentials secret '${key}' is empty"
-    if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
     exit 1
   fi
 
@@ -423,17 +427,15 @@ configure_git_credentials() {
   creds_file="$(git_credentials_file)"
   if [[ "$creds_file" != /* ]]; then
     log_error "git-credentials-file must be an absolute path (got '${creds_file}')"
-    if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
     exit 1
   fi
 
   if ! write_secret_file "$creds_file" "$creds_value"; then
     log_error "Unable to write git credentials file at ${creds_file}"
-    if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
     exit 1
   fi
 
-  # Inject via job-scoped GIT_CONFIG_* env rather than writing ~/.gitconfig, so we never touch the agent's persistent git config.
+  # Scope the helper per host and reset inherited helpers for those hosts, so nothing else can intercept or store the token.
   local helper line scope seen=" " scoped=0
 
   helper="store --file=$(sh_quote "${creds_file}")"
@@ -448,15 +450,14 @@ configure_git_credentials() {
   done <<< "$creds_value"
 
   if [[ $scoped -eq 0 ]]; then
-    # Fallback to generic helper
-    git_config_env_add credential.helper "$helper"
+    log_error "git-credentials secret '${key}' has no usable URL lines"
+    exit 1
   fi
 
   log_success "Configured git 'store' credential helper from secret '${key}'"
 
   if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
 }
-
 
 # Ripped from here:
 # https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
@@ -489,7 +490,6 @@ configure_git_ssh() {
   local ssh_key
   if ! ssh_key=$(provider_download_secret "$key"); then
     log_error "Unable to fetch git-ssh-key secret at ${key}"
-    if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
     exit 1
   fi
 
@@ -498,7 +498,6 @@ configure_git_ssh() {
   ssh_key_value="${ssh_key_value//$'\r'/}"
   if [[ -z "${ssh_key_value//[[:space:]]/}" ]]; then
     log_error "git-ssh-key secret '${key}' is empty"
-    if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
     exit 1
   fi
 
@@ -518,7 +517,6 @@ configure_git_ssh() {
 
   if ! write_secret_file "$key_file" "$ssh_key_value"; then
     log_error "Unable to write SSH key file at ${key_file}"
-    if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
     exit 1
   fi
 
@@ -528,7 +526,6 @@ configure_git_ssh() {
   fi
   if ! write_secret_file "$known_hosts_file" "$known_hosts"; then
     log_error "Unable to write SSH known_hosts file at ${known_hosts_file}"
-    if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
     exit 1
   fi
 

@@ -127,19 +127,6 @@ EOF
   unstub buildkite-agent
 }
 
-@test "Leaves a base64-looking credentials secret unchanged when it lacks a URL" {
-  export BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS="git-creds"
-  stub buildkite-agent "secret get git-creds : echo dXNlcg=="
-
-  run bash -c "$PWD/hooks/environment"
-
-  assert_success
-  run cat "$BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS_FILE"
-  assert_output "dXNlcg=="
-
-  unstub buildkite-agent
-}
-
 @test "Empty credentials secret is rejected" {
   export BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS="git-creds"
   stub buildkite-agent "secret get git-creds : printf ''"
@@ -176,6 +163,18 @@ EOF
 
   assert_failure
   assert_output --partial "must be an absolute path"
+
+  unstub buildkite-agent
+}
+
+@test "Credentials secret with no usable URL is rejected" {
+  export BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS="git-creds"
+  stub buildkite-agent "secret get git-creds : echo 'just-a-bare-token-no-url'"
+
+  run bash -c "$PWD/hooks/environment"
+
+  assert_failure
+  assert_output --partial "no usable URL"
 
   unstub buildkite-agent
 }

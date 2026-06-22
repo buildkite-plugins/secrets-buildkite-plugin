@@ -409,7 +409,8 @@ The fetched credentials are written to a private, job-scoped file and removed ag
 `pre-exit` hook. Set `git-credentials-file` to control where the file is
 written. By default, this will create a temporary file.
 
-For convenience, both raw strings and base64 values are accepted.
+The credentials may be stored raw or base64-encoded. The plugin detects and decodes
+base64 automatically.
 
 `git-credentials` and `git-ssh-key` are mutually exclusive. Configure one git
 auth method per step. Setting both will result in an `exit 1`.
@@ -452,15 +453,13 @@ detects and decodes base64 automatically.
 `git-credentials` and `git-ssh-key` are mutually exclusive. Configure one git
 auth method per step. Setting both will result in an `exit 1`.
 
-This plugin never touches your persistent git config. It injects its config through
-job scoped `GIT_CONFIG_*` environment variables, which apply only to this job's git
-processes. `~/.gitconfig` is never written or modified. The credential helper is
-scoped to each host found in your secret, and for those hosts it first resets any
-inherited helper so nothing else can intercept the request or store the token. Any
-credential helper the agent already had keeps working for every other host. The
-injected `core.sshCommand` takes precedence for this job. Because all of this lives
-only in the job's environment, your `~/.gitconfig` is never changed. The `pre-exit`
-hook only removes the secret file it wrote.
+This plugin never writes or modifies `~/.gitconfig`. It injects config only through
+job scoped `GIT_CONFIG_*` environment variables that apply to this job's git
+processes. The credential helper is scoped to each host in your secret, and for those
+hosts it first resets any inherited helper so nothing else can intercept the request
+or store the token. Any credential helper the agent already had keeps working for
+every other host, and the injected `core.sshCommand` applies only to this job. The
+`pre-exit` hook removes the secret file it wrote.
 
 ## Options
 
