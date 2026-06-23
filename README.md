@@ -461,6 +461,26 @@ or store the token. Any credential helper the agent already had keeps working fo
 every other host, and the injected `core.sshCommand` applies only to this job. The
 `pre-exit` hook removes the secret file it wrote.
 
+## Choosing between git-credentials and git-ssh-key
+
+Match the option to how the repository is cloned. `git-credentials` authenticates HTTPS remotes and `git-ssh-key` authenticates SSH remotes. The two do not cross over,
+so an HTTPS credential cannot authenticate an SSH clone. If your pipeline checks out over SSH, you will need to select `git-ssh-key`. If it checks out over HTTPS you need `git-credentials`.
+
+Because the plugin runs before the checkout, the fetched `git-credentials` or `git-ssh-key` will be used for the repo's own checkout, not only repositories you clone later in the build.
+As such, the method you select should to match your pipeline repo's clone URL, not just the URLs you use in your build steps.
+
+`git-ssh-key` configures a job wide `core.sshCommand`, so the fetched key becomes the only SSH identity git uses for the whole job, including the checkout.
+Any pre-existing SSH identity is not used while the key is configured.
+
+### Agent Stack for Kubernetes
+
+On the [Agent Stack for Kubernetes](https://buildkite.com/docs/agent/v3/agent-stack-k8s) the environment hook runs in every container that runs the plugin phase, which is
+both the checkout container and the command container in this case. Each one fetches the secret and configures git locally, so the credential is available for the `checkout` and for
+`command` phases you run in your build. The token will be destroyed in the `pre-exit` phase.
+
+By default, the Buildkite Agent ships with `git` and `ssh` which are required for this plugin,if you are using a custom image, please ensure that `git`, `ssh` and if your token is base64 encoded, `base64`
+are installed.
+
 ## Options
 
 ### Common Options
