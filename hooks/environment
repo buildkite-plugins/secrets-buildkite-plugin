@@ -22,11 +22,16 @@ main() {
 
   log_info "Using secrets provider ${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
 
+  validate_git_auth_config
+
   # Setup provider environment
   setup_provider_environment
 
   # Fetch secrets from the configured provider
   fetch_secrets
+
+  configure_git_credentials
+  configure_git_ssh
 }
 
 main "$@"

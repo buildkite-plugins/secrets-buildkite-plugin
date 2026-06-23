@@ -1,0 +1,36 @@
+#!/bin/bash
+set -euo pipefail
+
+# Load plugin library
+PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# shellcheck source=../lib/shared.bash
+if [[ -f "${PLUGIN_DIR}/lib/shared.bash" ]]; then
+  # shellcheck disable=SC1091
+  source "${PLUGIN_DIR}/lib/shared.bash"
+else
+  echo "[ERROR]: Failed to locate shared library at ${PLUGIN_DIR}/lib/shared.bash" >&2
+  exit 1
+fi
+
+# Remove the files the environment hook wrote to prevent residual git operations
+if [[ -n "${BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS:-}" ]]; then
+  creds_file="$(git_credentials_file)"
+  if [[ -f "${creds_file}" ]]; then
+    rm -f "${creds_file}"
+    log_info "Removed git credentials file"
+  fi
+fi
+
+if [[ -n "${BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY:-}" ]]; then
+  removed=0
+  for ssh_file in "$(git_ssh_key_file)" "$(git_ssh_known_hosts_file)"; do
+    if [[ -f "${ssh_file}" ]]; then
+      rm -f "${ssh_file}"
+      removed=1
+    fi
+  done
+  if [[ "${removed}" -eq 1 ]]; then
+    log_info "Removed git SSH key files"
+  fi
+fi

@@ -252,7 +252,7 @@ Map environment variable names to secret references:
 steps:
   - command: build.sh
     plugins:
-      - secrets#v2.1.0:
+      - secrets#v2.2.0:
           provider: op
           variables:
             API_KEY: my-vault/my-api-key/credential
@@ -282,7 +282,7 @@ Then reference it in your pipeline:
 steps:
   - command: build.sh
     plugins:
-      - secrets#v2.1.0:
+      - secrets#v2.2.0:
           provider: op
           env: my-vault/ci-batch-secrets/credential
 ```
@@ -331,7 +331,7 @@ steps:
 steps:
   - command: build.sh
     plugins:
-      - secrets#v2.1.0:
+      - secrets#v2.2.0:
           provider: op
           env: my-vault/ci-batch-secrets/credential
           variables:
@@ -376,6 +376,111 @@ steps:
             API_KEY: my-api-key
 ```
 
+## Git Credentials for Checkout
+
+Use the `git-credentials` option to fetch git credentials from any of the
+supported providers and configure them for the agent's checkout, without storing
+them as a Kubernetes Secret or a static file on the agent.
+
+The plugin runs in the `environment` hook, which the Agent runs inside the
+checkout container before the repository is cloned. The referenced secret
+value is used as a [git credentials file
+entry](https://git-scm.com/docs/git-credential-store#_storage_format), and the
+plugin configures git's store credential helper to use it:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.2.0:
+          provider: gcp
+          gcp-project: my-project-id
+          git-credentials: github-https-credentials
+```
+
+Store the secret value in the standard git credentials format, one entry per
+line:
+
+```
+https://x-access-token:ghp_yourtoken@github.com
+```
+
+The fetched credentials are written to a private, job-scoped file and removed again in the
+`pre-exit` hook. Set `git-credentials-file` to control where the file is
+written. By default, this will create a temporary file.
+
+The credentials may be stored raw or base64-encoded. The plugin detects and decodes
+base64 automatically.
+
+`git-credentials` and `git-ssh-key` are mutually exclusive. Configure one git
+auth method per step. Setting both will result in an `exit 1`.
+
+## SSH Keys for Checkout
+
+For SSH-based checkouts such as `git@host:...` or `ssh://...` remotes, use `git-ssh-key`.
+The plugin fetches an SSH private key from the active provider, writes it to a
+private file, and configures git's `core.sshCommand` to use it, with host key
+verification enabled. The configured ssh ignores user and system ssh_config,
+to ensure that tokens are used per-job, opposed to agent-wide.
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.2.0:
+          provider: gcp
+          gcp-project: my-project-id
+          git-ssh-key: deploy-key
+```
+
+Host key verification uses GitHub's published host keys by default. To verify a
+different host such as a self-hosted git server, supply your own
+`known_hosts` contents:
+
+```yaml
+      - secrets#v2.2.0:
+          provider: gcp
+          gcp-project: my-project-id
+          git-ssh-key: deploy-key
+          git-ssh-known-hosts: |
+            git.internal.example.com ssh-ed25519 AAAA...
+```
+
+The key is written to a private job scoped file and removed again in the
+`pre-exit` hook. The key may be stored raw or base64-encoded. The plugin
+detects and decodes base64 automatically.
+
+`git-credentials` and `git-ssh-key` are mutually exclusive. Configure one git
+auth method per step. Setting both will result in an `exit 1`.
+
+This plugin never writes or modifies `~/.gitconfig`. It injects config only through
+job scoped `GIT_CONFIG_*` environment variables that apply to this job's git
+processes. The credential helper is scoped to each host in your secret, and for those
+hosts it first resets any inherited helper so nothing else can intercept the request
+or store the token. Any credential helper the agent already had keeps working for
+every other host, and the injected `core.sshCommand` applies only to this job. The
+`pre-exit` hook removes the secret file it wrote.
+
+## Choosing between git-credentials and git-ssh-key
+
+Match the option to how the repository is cloned. `git-credentials` authenticates HTTPS remotes and `git-ssh-key` authenticates SSH remotes. The two do not cross over,
+so an HTTPS credential cannot authenticate an SSH clone. If your pipeline checks out over SSH, you will need to select `git-ssh-key`. If it checks out over HTTPS you need `git-credentials`.
+
+Because the plugin runs before the checkout, the fetched `git-credentials` or `git-ssh-key` will be used for the repo's own checkout, not only repositories you clone later in the build.
+As such, the method you select should to match your pipeline repo's clone URL, not just the URLs you use in your build steps.
+
+`git-ssh-key` configures a job wide `core.sshCommand`, so the fetched key becomes the only SSH identity git uses for the whole job, including the checkout.
+Any pre-existing SSH identity is not used while the key is configured.
+
+### Agent Stack for Kubernetes
+
+On the [Agent Stack for Kubernetes](https://buildkite.com/docs/agent/v3/agent-stack-k8s) the environment hook runs in every container that runs the plugin phase, which is
+both the checkout container and the command container in this case. Each one fetches the secret and configures git locally, so the credential is available for the `checkout` and for
+`command` phases you run in your build. The token will be destroyed in the `pre-exit` phase.
+
+By default, the Buildkite Agent ships with `git` and `ssh` which are required for this plugin,if you are using a custom image, please ensure that `git`, `ssh` and if your token is base64 encoded, `base64`
+are installed.
+
 ## Options
 
 ### Common Options
@@ -391,6 +496,10 @@ These options apply to all providers.
 | `skip-redaction` | boolean | `false` | If `true`, secrets will not be automatically redacted from logs. |
 | `retry-max-attempts` | number | `5` | Maximum retry attempts for transient failures. |
 | `retry-base-delay` | number | `2` | Base delay in seconds for exponential backoff between retries. |
+| `git-credentials` | string | - | Secret holding HTTPS git credentials for the checkout. |
+| `git-credentials-file` | string | - | Absolute path to write the credentials to. Defaults to a private temp file. |
+| `git-ssh-key` | string | - | Secret holding an SSH private key for the checkout. |
+| `git-ssh-known-hosts` | string | GitHub | `known_hosts` contents to verify the SSH host. Defaults to GitHub's keys. |
 
 ### GCP Provider Options
 
