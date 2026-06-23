@@ -33,7 +33,7 @@ A `pipeline.yml` like this will read each secret out into an environment variabl
 steps:
   - command: echo "The content of ANIMAL is \$ANIMAL"
     plugins:
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           variables:
             ANIMAL: llamas
             FOO: bar
@@ -65,7 +65,7 @@ job environment using a pipeline.yml like this:
 steps:
   - command: build.sh
     plugins:
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           env: "llamas"
 ```
 
@@ -98,7 +98,7 @@ steps:
       - gcp-workload-identity-federation#v1.5.0:
           audience: "//iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/buildkite"
           service-account: "my-service-account@my-project-id.iam.gserviceaccount.com"
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           provider: gcp
           gcp-project: my-project-id
           variables:
@@ -133,7 +133,7 @@ steps:
       - gcp-workload-identity-federation#v1.5.0:
           audience: "//iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/buildkite"
           service-account: "my-service-account@my-project-id.iam.gserviceaccount.com"
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           provider: gcp
           gcp-project: my-project-id
           env: "ci-env-secrets"
@@ -160,7 +160,7 @@ steps:
       - azure-login#v1.0.1:
           client-id: "your-client-id"
           tenant-id: "your-tenant-id"
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           provider: azure
           azure-vault-name: my-vault
           variables:
@@ -178,7 +178,7 @@ steps:
       - azure-login#v1.0.1:
           client-id: "your-client-id"
           tenant-id: "your-tenant-id"
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           provider: azure
           azure-vault-name: my-vault
           variables:
@@ -200,7 +200,7 @@ steps:
       - azure-login#v1.0.1:
           client-id: "your-client-id"
           tenant-id: "your-tenant-id"
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           provider: azure
           azure-vault-name: my-vault
           env: batch-secrets
@@ -252,7 +252,7 @@ Map environment variable names to secret references:
 steps:
   - command: build.sh
     plugins:
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           provider: op
           variables:
             API_KEY: my-vault/my-api-key/credential
@@ -282,7 +282,7 @@ Then reference it in your pipeline:
 steps:
   - command: build.sh
     plugins:
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           provider: op
           env: my-vault/ci-batch-secrets/credential
 ```
@@ -300,7 +300,7 @@ steps:
       - gcp-workload-identity-federation#v1.5.0:
           audience: "//iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/buildkite"
           service-account: "my-service-account@my-project-id.iam.gserviceaccount.com"
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           provider: gcp
           gcp-project: my-project-id
           env: "ci-env-secrets"
@@ -317,7 +317,7 @@ steps:
       - azure-login#v1.0.1:
           client-id: "your-client-id"
           tenant-id: "your-tenant-id"
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           provider: azure
           azure-vault-name: my-vault
           env: batch-secrets
@@ -331,7 +331,7 @@ steps:
 steps:
   - command: build.sh
     plugins:
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           provider: op
           env: my-vault/ci-batch-secrets/credential
           variables:
@@ -349,7 +349,7 @@ steps:
       - gcp-workload-identity-federation#v1.5.0:
           audience: "//iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/buildkite"
           service-account: "my-service-account@my-project-id.iam.gserviceaccount.com"
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           provider: gcp
           gcp-project: my-project-id
           gcp-secret-version: "5"
@@ -368,7 +368,7 @@ steps:
       - azure-login#v1.0.1:
           client-id: "your-client-id"
           tenant-id: "your-tenant-id"
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           provider: azure
           azure-vault-name: my-vault
           azure-secret-version: "a1b2c3d4e5f6"
@@ -392,7 +392,7 @@ plugin configures git's store credential helper to use it:
 steps:
   - command: build.sh
     plugins:
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           provider: gcp
           gcp-project: my-project-id
           git-credentials: github-https-credentials
@@ -427,7 +427,7 @@ to ensure that tokens are used per-job, opposed to agent-wide.
 steps:
   - command: build.sh
     plugins:
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           provider: gcp
           gcp-project: my-project-id
           git-ssh-key: deploy-key
@@ -438,7 +438,7 @@ different host such as a self-hosted git server, supply your own
 `known_hosts` contents:
 
 ```yaml
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           provider: gcp
           gcp-project: my-project-id
           git-ssh-key: deploy-key
@@ -539,7 +539,7 @@ To disable automatic redaction (not recommended), set `skip-redaction: true`:
 steps:
   - command: build.sh
     plugins:
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           env: "llamas"
           skip-redaction: true
 ```
@@ -556,7 +556,7 @@ By default, the base delay will be 2 seconds, with a maximum of 5 retries.
 steps:
   - command: build.sh
     plugins:
-      - secrets#v2.2.0:
+      - secrets#v2.3.0:
           env: "llamas"
           retry-max-attempts: 10
           retry-base-delay: 2
