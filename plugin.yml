@@ -9,7 +9,7 @@ configuration:
   properties:
     provider:
       type: string
-      enum: ["buildkite", "gcp", "azure", "op"]
+      enum: ["buildkite", "gcp", "azure", "aws", "op"]
       default: "buildkite"
       description: "The secrets provider to use."
     azure-vault-name:
@@ -24,6 +24,22 @@ configuration:
     variables:
       type: object
       description: "Map of ENV_VAR_NAME: secret-path for individual secrets"
+    json-variables:
+      type: array
+      description: "List of { secret-id, json-key } objects (AWS) whose JSON content at json-key (a jq path, default '.') is expanded into one environment variable per key"
+      items:
+        type: object
+        properties:
+          secret-id:
+            type: string
+            description: "The AWS secret name or ARN to fetch"
+          json-key:
+            type: string
+            default: "."
+            description: "jq path into the secret's JSON content to expand (default '.', the whole object)"
+        required:
+          - secret-id
+        additionalProperties: false
     mute-log:
       type: boolean
       default: true
@@ -48,6 +64,16 @@ configuration:
       type: string
       default: "latest"
       description: "Secret version to fetch (default: latest)"
+    # AWS Secrets Manager options
+    aws-region:
+      type: string
+      description: "AWS region to fetch secrets from (optional - falls back to the AWS CLI's configured region)"
+    aws-secret-version-id:
+      type: string
+      description: "AWS Secrets Manager version ID to fetch (optional, defaults to the AWSCURRENT staged version)"
+    aws-secret-version-stage:
+      type: string
+      description: "AWS Secrets Manager staging label to fetch (optional, defaults to AWSCURRENT)"
     git-credentials:
       type: string
       description: "Secret holding HTTPS git credentials for the checkout."
