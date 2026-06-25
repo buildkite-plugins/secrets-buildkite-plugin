@@ -228,7 +228,7 @@ Use `provider: aws` to fetch secrets from [AWS Secrets Manager](https://aws.amaz
 ### Prerequisites
 
 - The [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) (`aws`) installed on your Buildkite agent.
-- The agent must be authenticated to AWS with permissions to call `secretsmanager:GetSecretValue` on the relevant secrets (e.g. via instance profile, an OIDC-based plugin, or static credentials in the environment).
+- The agent must be authenticated to AWS with permissions to call `secretsmanager:GetSecretValue` on the relevant secrets. Use the [aws-assume-role-with-web-identity](https://buildkite.com/resources/plugins/buildkite-plugins/aws-assume-role-with-web-identity-buildkite-plugin/) plugin to authenticate via OIDC; an instance profile or static credentials in the environment also work.
 - [jq](https://jqlang.github.io/jq/) installed on the agent if you use `json-variables` (see below).
 
 ### AWS Region Configuration
