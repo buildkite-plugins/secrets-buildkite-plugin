@@ -43,6 +43,24 @@ check_dependencies() {
     log_info "Please install base64 and try again."
   fi
 
+  if [[ -n "${BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS:-}" ]] && ! command_exists git; then
+    missing_deps+=("git")
+    log_error "git is required when using the git-credentials option"
+    log_info "Please install git and try again."
+  fi
+
+  if [[ -n "${BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY:-}" ]] && ! command_exists git; then
+    missing_deps+=("git")
+    log_error "git is required when using the git-ssh-key option"
+    log_info "Please install git and try again."
+  fi
+
+  if [[ -n "${BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY:-}" ]] && ! command_exists ssh; then
+    missing_deps+=("ssh")
+    log_error "ssh is required when using the git-ssh-key option"
+    log_info "Please install OpenSSH and try again."
+  fi
+
   case "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}" in
     buildkite)
       # No additional deps beyond the base checks above
@@ -236,4 +254,300 @@ redact_secrets() {
   done
 
   if [[ $xtrace_was_set -eq 1 ]]; then set -x; else { set +x; } 2>/dev/null; fi
+}
+
+provider_download_secret() {
+  local key="$1"
+  case "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}" in
+    buildkite)
+      download_secret "$key"
+      ;;
+    gcp)
+      download_gcp_secret "$key"
+      ;;
+    azure)
+      download_azure_secret "$key"
+      ;;
+    op)
+      download_op_secret "$key"
+      ;;
+    *)
+      unknown_provider "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
+      ;;
+  esac
+}
+
+# Decode a fetched secret if it is base64 encoded, checking for markers
+decode_if_base64() {
+  # Disable xtrace to prevent leaks
+  local xtrace_was_set=0
+  [[ -o xtrace ]] && xtrace_was_set=1
+  { set +x; } 2>/dev/null
+
+  local value="$1" marker="$2" decoded result
+
+  if [[ "$value" == *"$marker"* ]]; then
+    result="$value"
+  elif decoded=$(printf '%s' "$value" | base64 -d 2>/dev/null) && [[ "$decoded" == *"$marker"* ]]; then
+    result="$decoded"
+  else
+    result="$value"
+  fi
+
+  printf '%s' "$result"
+
+  if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
+}
+
+validate_git_auth_config() {
+  if [[ -n "${BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS:-}" && -n "${BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY:-}" ]]; then
+    log_error "git-credentials and git-ssh-key are mutually exclusive. Configure one git auth method per step."
+    exit 1
+  fi
+}
+
+git_credentials_file() {
+  if [[ -n "${BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS_FILE:-}" ]]; then
+    echo "${BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS_FILE}"
+  else
+    local dir="${TMPDIR:-/tmp}"
+    echo "${dir%/}/buildkite-secrets-git-credentials${BUILDKITE_JOB_ID:+-${BUILDKITE_JOB_ID}}"
+  fi
+}
+
+# Append a git config to the GIT_CONFIG_* environment variables
+# so we can make ephemeral git config without touching persistent files
+git_config_env_add() {
+  local n="${GIT_CONFIG_COUNT:-0}"
+
+  if [[ ! "$n" =~ ^[0-9]+$ ]]; then
+    log_warning "Ignoring non-numeric inherited GIT_CONFIG_COUNT '${n}'"
+    n=0
+  fi
+
+  export "GIT_CONFIG_KEY_${n}=$1"
+  export "GIT_CONFIG_VALUE_${n}=$2"
+  export "GIT_CONFIG_COUNT=$((n + 1))"
+}
+
+write_secret_file() {
+  local xtrace_was_set=0
+  [[ -o xtrace ]] && xtrace_was_set=1
+  { set +x; } 2>/dev/null
+
+  local dest="$1" content="$2" dir src rc=0
+
+  # Refuse a dir, trailing-slash or empty dest
+  if [[ -z "$dest" || "$dest" == */ || -d "$dest" ]]; then
+    if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
+    return 1
+  fi
+
+  dir="$(dirname "$dest")"
+  src="$(mktemp "${dir}/.bk-secret.XXXXXX" 2>/dev/null)" || rc=1
+
+  if [[ $rc -eq 0 ]]; then
+    chmod 600 "$src" 2>/dev/null || true
+    printf '%s\n' "$content" >"$src" || rc=1
+  fi
+
+  if [[ $rc -eq 0 ]]; then
+    if mv -f "$src" "$dest" 2>/dev/null; then
+      src=""   # moved into place, no temp left to clean up
+    else
+      rc=1
+    fi
+  fi
+
+  if [[ $rc -eq 0 && ( ! -f "$dest" || -L "$dest" ) ]]; then rc=1; fi
+  if [[ -n "${src:-}" ]]; then rm -f "$src" 2>/dev/null || true; fi
+  if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
+  return $rc
+}
+
+# Single quote $1 for safe embedding in a shell command string, escaping embedded quotes.
+sh_quote() {
+  local sq="'\''"
+  printf "'%s'" "${1//\'/$sq}"
+}
+
+# Extract the protocol, host and port from one git credentials line
+credential_url_scope() {
+  local xtrace_was_set=0
+  [[ -o xtrace ]] && xtrace_was_set=1
+  { set +x; } 2>/dev/null
+
+  local line proto rest hostport rc=0
+  line="${1//[[:space:]]/}"
+  if [[ "$line" == *"://"* ]]; then
+    proto="${line%%://*}"
+    rest="${line#*://}"
+    rest="${rest##*@}"
+    hostport="${rest%%/*}"
+    if [[ -n "$proto" && -n "$hostport" ]]; then
+      printf '%s://%s' "$proto" "$hostport"
+    else
+      rc=1
+    fi
+  else
+    rc=1
+  fi
+
+  if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
+  return $rc
+}
+
+configure_git_credentials() {
+  local key="${BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS:-}"
+  [[ -z "$key" ]] && return 0
+
+  # Disable debug tracing to prevent secret values from leaking to logs
+  local xtrace_was_set=0
+  [[ -o xtrace ]] && xtrace_was_set=1
+  { set +x; } 2>/dev/null
+
+  log_info "Configuring git credentials from secret '${key}'"
+
+  local creds
+
+  if ! creds=$(provider_download_secret "$key"); then
+    log_error "Unable to fetch git-credentials secret at ${key}"
+    exit 1
+  fi
+
+  local creds_value
+
+  creds_value="$(decode_if_base64 "$creds" "://")"
+
+  creds_value="${creds_value//$'\r'/}"
+
+  if [[ -z "${creds_value//[[:space:]]/}" ]]; then
+    log_error "git-credentials secret '${key}' is empty"
+    exit 1
+  fi
+
+  # Redact before writing
+  if [[ "${BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION:-}" != "true" ]]; then
+    local GIT_CREDENTIALS_TO_REDACT=("$creds")
+    if [[ "$creds_value" != "$creds" ]]; then
+      GIT_CREDENTIALS_TO_REDACT+=("$creds_value")
+    fi
+    redact_secrets GIT_CREDENTIALS_TO_REDACT
+  fi
+
+  local creds_file
+
+  creds_file="$(git_credentials_file)"
+  if [[ "$creds_file" != /* ]]; then
+    log_error "git-credentials-file must be an absolute path (got '${creds_file}')"
+    exit 1
+  fi
+
+  if ! write_secret_file "$creds_file" "$creds_value"; then
+    log_error "Unable to write git credentials file at ${creds_file}"
+    exit 1
+  fi
+
+  # Scope the helper per host and reset inherited helpers for those hosts, so nothing else can intercept or store the token.
+  local helper line scope seen=" " scoped=0
+
+  helper="store --file=$(sh_quote "${creds_file}")"
+
+  while IFS= read -r line; do
+    scope="$(credential_url_scope "$line")" || continue
+    [[ "$seen" == *" ${scope} "* ]] && continue
+    seen+="${scope} "
+    git_config_env_add "credential.${scope}.helper" ""
+    git_config_env_add "credential.${scope}.helper" "$helper"
+    scoped=1
+  done <<< "$creds_value"
+
+  if [[ $scoped -eq 0 ]]; then
+    log_error "git-credentials secret '${key}' has no usable URL lines"
+    exit 1
+  fi
+
+  log_success "Configured git 'store' credential helper from secret '${key}'"
+
+  if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
+}
+
+# Ripped from here:
+# https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
+GITHUB_SSH_KNOWN_HOSTS="github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg=
+github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCj7ndNxQowgcQnjshcLrqPEiiphnt+VTTvDP6mHBL9j1aNUkY4Ue1gvwnGLVlOhGeYrnZaMgRK6+PKCUXaDbC7qtbW8gIkhL7aGCsOr/C56SJMy/BCZfxd1nWzAOxSDPgVsmerOBYfNqltV9/hWCqBywINIR+5dIg6JTJ72pcEpEjcYgXkE2YEFXV1JHnsKgbLWNlhScqb2UmyRkQyytRLtL+38TGxkxCflmO+5Z8CSSNY7GidjMIZ7Q4zMjA2n1nGrlTDkzwDCsw+wqFPGQA179cnfGWOWRVruj16z6XyvxvjJwbz0wQZ75XK5tKSb7FNyeIEs4TT4jk+S4dhPeAUC5y+bDYirYgM4GC7uEnztnZyaVWQ7B381AK4Qdrwt51ZqExKbQpTUNn+EjqoTwvqNj4kqx5QUCI0ThS/YkOxJCXmPUWZbhjpCg56i+2aB6CmK2JGhn57K5mj0MNdBXA4/WnwH6XoPWJzK5Nyu2zB3nAZp+S5hpQs+p1vN1/wsjk="
+
+# Written by the environment hook and removed by pre-exit.
+git_ssh_key_file() {
+  local dir="${TMPDIR:-/tmp}"
+  echo "${dir%/}/buildkite-secrets-git-ssh-key${BUILDKITE_JOB_ID:+-${BUILDKITE_JOB_ID}}"
+}
+
+git_ssh_known_hosts_file() {
+  local dir="${TMPDIR:-/tmp}"
+  echo "${dir%/}/buildkite-secrets-git-ssh-known-hosts${BUILDKITE_JOB_ID:+-${BUILDKITE_JOB_ID}}"
+}
+
+# Configures core.sshCommand to use the fetched key, keeping host-key
+# verification on with known_hosts defaulting to GitHub's, or git-ssh-known-hosts.
+configure_git_ssh() {
+  local key="${BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY:-}"
+  [[ -z "$key" ]] && return 0
+
+  # Disable debug tracing to prevent the key from leaking to logs
+  local xtrace_was_set=0
+  [[ -o xtrace ]] && xtrace_was_set=1
+  { set +x; } 2>/dev/null
+
+  log_info "Configuring git SSH key from secret '${key}'"
+
+  local ssh_key
+  if ! ssh_key=$(provider_download_secret "$key"); then
+    log_error "Unable to fetch git-ssh-key secret at ${key}"
+    exit 1
+  fi
+
+  local ssh_key_value
+  ssh_key_value="$(decode_if_base64 "$ssh_key" "PRIVATE KEY")"
+  ssh_key_value="${ssh_key_value//$'\r'/}"
+  if [[ -z "${ssh_key_value//[[:space:]]/}" ]]; then
+    log_error "git-ssh-key secret '${key}' is empty"
+    exit 1
+  fi
+
+  # Redact before writing, covering the decoded form too
+  if [[ "${BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION:-}" != "true" ]]; then
+    # shellcheck disable=SC2034
+    local GIT_SSH_KEY_TO_REDACT=("$ssh_key")
+    if [[ "$ssh_key_value" != "$ssh_key" ]]; then
+      GIT_SSH_KEY_TO_REDACT+=("$ssh_key_value")
+    fi
+    redact_secrets GIT_SSH_KEY_TO_REDACT
+  fi
+
+  local key_file known_hosts_file
+  key_file="$(git_ssh_key_file)"
+  known_hosts_file="$(git_ssh_known_hosts_file)"
+
+  if ! write_secret_file "$key_file" "$ssh_key_value"; then
+    log_error "Unable to write SSH key file at ${key_file}"
+    exit 1
+  fi
+
+  local known_hosts="${GITHUB_SSH_KNOWN_HOSTS}"
+  if [[ -n "${BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KNOWN_HOSTS:-}" ]]; then
+    known_hosts="${BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KNOWN_HOSTS}"
+  fi
+  if ! write_secret_file "$known_hosts_file" "$known_hosts"; then
+    log_error "Unable to write SSH known_hosts file at ${known_hosts_file}"
+    exit 1
+  fi
+
+  git_config_env_add core.sshCommand \
+    "ssh -F /dev/null -i $(sh_quote "${key_file}") -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o UserKnownHostsFile=$(sh_quote "${known_hosts_file}") -o StrictHostKeyChecking=yes"
+
+  log_success "Configured git SSH key from secret '${key}'"
+
+  if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
 }

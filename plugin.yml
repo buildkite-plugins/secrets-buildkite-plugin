@@ -74,4 +74,16 @@ configuration:
     aws-secret-version-stage:
       type: string
       description: "AWS Secrets Manager staging label to fetch (optional, defaults to AWSCURRENT)"
+    git-credentials:
+      type: string
+      description: "Secret holding HTTPS git credentials for the checkout."
+    git-credentials-file:
+      type: string
+      description: "Absolute path to write the credentials to. Defaults to a private temp file."
+    git-ssh-key:
+      type: string
+      description: "Secret holding an SSH private key for the checkout."
+    git-ssh-known-hosts:
+      type: string
+      description: "known_hosts contents to verify the SSH host. Defaults to GitHub's keys."
   additionalProperties: false
