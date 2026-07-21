@@ -299,6 +299,43 @@ decode_if_base64() {
   if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
 }
 
+# On Agent Stack for Kubernetes, the environment hook runs once per phase
+# container, and BUILDKITE_BOOTSTRAP_PHASES lists the phase(s) that
+# container is executing (e.g. contains "checkout" or "command"). Classic
+# agents run the environment hook exactly once for the whole job and never
+# set this variable, so there's nothing to gate there.
+phase_applies_to_current_container() {
+  local bootstrap_phases="${BUILDKITE_BOOTSTRAP_PHASES:-}"
+
+  if [[ -z "$bootstrap_phases" ]]; then
+    return 0
+  fi
+
+  local configured_phases=()
+  for ((i=0; ; i++)); do
+    local var_name="BUILDKITE_PLUGIN_SECRETS_PHASES_$i"
+    if [[ -n "${!var_name:-}" ]]; then
+      configured_phases+=("${!var_name}")
+    else
+      break
+    fi
+  done
+
+  # Default to both phases when unset, preserving current behavior
+  if [[ ${#configured_phases[@]} -eq 0 ]]; then
+    configured_phases=("checkout" "command")
+  fi
+
+  local phase
+  for phase in "${configured_phases[@]}"; do
+    if [[ "$bootstrap_phases" == *"$phase"* ]]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 validate_git_auth_config() {
   if [[ -n "${BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS:-}" && -n "${BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY:-}" ]]; then
     log_error "git-credentials and git-ssh-key are mutually exclusive. Configure one git auth method per step."

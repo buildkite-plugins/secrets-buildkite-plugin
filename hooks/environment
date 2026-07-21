@@ -14,6 +14,11 @@ else
 fi
 
 main() {
+  if ! phase_applies_to_current_container; then
+    log_info "Skipping secret fetch: current phase (BUILDKITE_BOOTSTRAP_PHASES=${BUILDKITE_BOOTSTRAP_PHASES:-}) is not in the configured phases"
+    return 0
+  fi
+
   local log_prefix="~~~"
   if [[ "${BUILDKITE_PLUGIN_SECRETS_MUTE_LOG:-true}" == "false" ]]; then
     log_prefix="---"
