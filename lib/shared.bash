@@ -312,10 +312,19 @@ phase_applies_to_current_container() {
   fi
 
   local configured_phases=()
+  local i var_name phase
   for ((i=0; ; i++)); do
-    local var_name="BUILDKITE_PLUGIN_SECRETS_PHASES_$i"
+    var_name="BUILDKITE_PLUGIN_SECRETS_PHASES_$i"
     if [[ -n "${!var_name:-}" ]]; then
-      configured_phases+=("${!var_name}")
+      phase="${!var_name}"
+      case "$phase" in
+        checkout|command) ;;
+        *)
+          log_error "Invalid phases value '${phase}': must be 'checkout' or 'command'"
+          exit 1
+          ;;
+      esac
+      configured_phases+=("$phase")
     else
       break
     fi
@@ -326,7 +335,6 @@ phase_applies_to_current_container() {
     configured_phases=("checkout" "command")
   fi
 
-  local phase
   for phase in "${configured_phases[@]}"; do
     if [[ "$bootstrap_phases" == *"$phase"* ]]; then
       return 0

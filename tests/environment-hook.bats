@@ -313,6 +313,17 @@ EOF
     unstub buildkite-agent
 }
 
+@test "Fails with a clear error on an invalid phases value" {
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+    export BUILDKITE_PLUGIN_SECRETS_PHASES_0="chekout"
+    export BUILDKITE_BOOTSTRAP_PHASES="plugin,environment,checkout"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_failure
+    assert_output --partial "Invalid phases value 'chekout'"
+}
+
 @test "Fetches in both containers by default when phases is unset" {
     export TESTDATA='Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK'
     export BUILDKITE_PLUGIN_SECRETS_ENV="env"
