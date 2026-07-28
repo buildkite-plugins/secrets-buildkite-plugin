@@ -335,6 +335,11 @@ phase_applies_to_current_container() {
     configured_phases=("checkout" "command")
   fi
 
+  # Substring match is safe because the case statement above restricts
+  # configured_phases to exactly "checkout" or "command", and Buildkite's
+  # phase names in BUILDKITE_BOOTSTRAP_PHASES don't overlap with each other.
+  # If a future phase (e.g. "pre-checkout") is ever added to the enum,
+  # switch this to an exact/word-boundary match instead.
   for phase in "${configured_phases[@]}"; do
     if [[ "$bootstrap_phases" == *"$phase"* ]]; then
       return 0

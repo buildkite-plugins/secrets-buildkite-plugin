@@ -313,6 +313,18 @@ EOF
     unstub buildkite-agent
 }
 
+@test "Skips fetching in command container when phases is checkout-only" {
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+    export BUILDKITE_PLUGIN_SECRETS_PHASES_0="checkout"
+    export BUILDKITE_BOOTSTRAP_PHASES="plugin,environment,command"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_success
+    assert_output --partial "Skipping secret fetch"
+    refute_output --partial ":closed_lock_with_key: Fetching secrets"
+}
+
 @test "Fails with a clear error on an invalid phases value" {
     export BUILDKITE_PLUGIN_SECRETS_ENV="env"
     export BUILDKITE_PLUGIN_SECRETS_PHASES_0="chekout"
