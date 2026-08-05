@@ -45,8 +45,8 @@ configuration:
       items:
         type: string
         enum: ["checkout", "command"]
-        enum: ["checkout", "command"]
       minItems: 1
+      default: ["checkout", "command"]
       description: "Which job phases this plugin instance applies to. Only relevant on Agent Stack for Kubernetes, where the environment hook re-runs once per phase container; classic agents run it once for the whole job regardless of this setting. Defaults to both phases (current behavior)."
     mute-log:
       type: boolean
