@@ -8,6 +8,8 @@ setup() {
   export BUILDKITE_PIPELINE_SLUG=testpipe
   export BUILDKITE_PLUGIN_SECRETS_RETRY_BASE_DELAY=0
   export BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION=true
+  unset BUILDKITE_BOOTSTRAP_PHASES
+  unset BUILDKITE_CONTAINER_ID
 }
 
 @test "Uses muted header (~~~) by default" {
@@ -290,6 +292,7 @@ EOF
     export BUILDKITE_PLUGIN_SECRETS_ENV="env"
     export BUILDKITE_PLUGIN_SECRETS_PHASES_0="command"
     export BUILDKITE_BOOTSTRAP_PHASES="plugin,environment,checkout"
+    export BUILDKITE_CONTAINER_ID="0"
 
     run bash -c "$PWD/hooks/environment"
 
@@ -303,6 +306,7 @@ EOF
     export BUILDKITE_PLUGIN_SECRETS_ENV="env"
     export BUILDKITE_PLUGIN_SECRETS_PHASES_0="command"
     export BUILDKITE_BOOTSTRAP_PHASES="plugin,environment,command"
+    export BUILDKITE_CONTAINER_ID="1"
 
     stub buildkite-agent "secret get env : echo ${TESTDATA}"
 
@@ -317,6 +321,7 @@ EOF
     export BUILDKITE_PLUGIN_SECRETS_ENV="env"
     export BUILDKITE_PLUGIN_SECRETS_PHASES_0="checkout"
     export BUILDKITE_BOOTSTRAP_PHASES="plugin,environment,command"
+    export BUILDKITE_CONTAINER_ID="1"
 
     run bash -c "$PWD/hooks/environment"
 
@@ -329,6 +334,7 @@ EOF
     export BUILDKITE_PLUGIN_SECRETS_ENV="env"
     export BUILDKITE_PLUGIN_SECRETS_PHASES_0="chekout"
     export BUILDKITE_BOOTSTRAP_PHASES="plugin,environment,checkout"
+    export BUILDKITE_CONTAINER_ID="0"
 
     run bash -c "$PWD/hooks/environment"
 
@@ -340,6 +346,23 @@ EOF
     export TESTDATA='Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK'
     export BUILDKITE_PLUGIN_SECRETS_ENV="env"
     export BUILDKITE_BOOTSTRAP_PHASES="plugin,environment,checkout"
+    export BUILDKITE_CONTAINER_ID="0"
+
+    stub buildkite-agent "secret get env : echo ${TESTDATA}"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_success
+    assert_output --partial ":closed_lock_with_key: Fetching secrets"
+    unstub buildkite-agent
+}
+
+@test "Runs on a classic agent even if BUILDKITE_BOOTSTRAP_PHASES is set without BUILDKITE_CONTAINER_ID" {
+    export TESTDATA='Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK'
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+    export BUILDKITE_PLUGIN_SECRETS_PHASES_0="command"
+    export BUILDKITE_BOOTSTRAP_PHASES="plugin,checkout"
+    unset BUILDKITE_CONTAINER_ID
 
     stub buildkite-agent "secret get env : echo ${TESTDATA}"
 
