@@ -299,6 +299,62 @@ decode_if_base64() {
   if [[ $xtrace_was_set -eq 1 ]]; then set -x; fi
 }
 
+# On Agent Stack for Kubernetes, the environment hook runs once per phase
+# container, and BUILDKITE_BOOTSTRAP_PHASES lists the phase(s) that
+# container is executing (e.g. contains "checkout" or "command").
+#
+# BUILDKITE_BOOTSTRAP_PHASES alone isn't a reliable signal for "we're on
+# Agent Stack for Kubernetes": classic agents support it too (e.g. to
+# restrict which phases a bootstrap invocation runs), so gating on it there
+# would silently skip secret fetches on a single-container job. Require
+# BUILDKITE_CONTAINER_ID as well, since the agent defines that variable as
+# specific to Agent Stack for Kubernetes.
+phase_applies_to_current_container() {
+  local bootstrap_phases="${BUILDKITE_BOOTSTRAP_PHASES:-}"
+  local container_id="${BUILDKITE_CONTAINER_ID:-}"
+
+  if [[ -z "$bootstrap_phases" || -z "$container_id" ]]; then
+    return 0
+  fi
+
+  local configured_phases=()
+  local i var_name phase
+  for ((i=0; ; i++)); do
+    var_name="BUILDKITE_PLUGIN_SECRETS_PHASES_$i"
+    if [[ -n "${!var_name:-}" ]]; then
+      phase="${!var_name}"
+      case "$phase" in
+        checkout|command) ;;
+        *)
+          log_error "Invalid phases value '${phase}': must be 'checkout' or 'command'"
+          exit 1
+          ;;
+      esac
+      configured_phases+=("$phase")
+    else
+      break
+    fi
+  done
+
+  # Default to both phases when unset, preserving current behavior
+  if [[ ${#configured_phases[@]} -eq 0 ]]; then
+    configured_phases=("checkout" "command")
+  fi
+
+  # Substring match is safe because the case statement above restricts
+  # configured_phases to exactly "checkout" or "command", and Buildkite's
+  # phase names in BUILDKITE_BOOTSTRAP_PHASES don't overlap with each other.
+  # If a future phase (e.g. "pre-checkout") is ever added to the enum,
+  # switch this to an exact/word-boundary match instead.
+  for phase in "${configured_phases[@]}"; do
+    if [[ "$bootstrap_phases" == *"$phase"* ]]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 validate_git_auth_config() {
   if [[ -n "${BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS:-}" && -n "${BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY:-}" ]]; then
     log_error "git-credentials and git-ssh-key are mutually exclusive. Configure one git auth method per step."

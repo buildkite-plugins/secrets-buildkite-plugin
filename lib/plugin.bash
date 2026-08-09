@@ -25,6 +25,16 @@ plugin_read_config() {
     fi
   done
 
+  # Export phases array (which job phases this plugin instance applies to)
+  for ((i=0; ; i++)); do
+    local phase_var="BUILDKITE_PLUGIN_SECRETS_PHASES_$i"
+    if [[ -n "${!phase_var:-}" ]]; then
+      export "BUILDKITE_PLUGIN_SECRETS_PHASES_$i"
+    else
+      break
+    fi
+  done
+
   # Export json-variables array of { secret-id, json-key } objects
   # (AWS provider: expand a secret's JSON content into env vars, one per key)
   for ((i=0; ; i++)); do

@@ -8,6 +8,8 @@ setup() {
   export BUILDKITE_PIPELINE_SLUG=testpipe
   export BUILDKITE_PLUGIN_SECRETS_RETRY_BASE_DELAY=0
   export BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION=true
+  unset BUILDKITE_BOOTSTRAP_PHASES
+  unset BUILDKITE_CONTAINER_ID
 }
 
 @test "Uses muted header (~~~) by default" {
@@ -268,6 +270,106 @@ EOF
     assert_success
     assert_output --partial "doesn't support secret redaction"
     assert_output --partial "Upgrade to buildkite-agent v3.67.0"
+    unstub buildkite-agent
+}
+
+@test "Runs on classic agents regardless of phases config (BUILDKITE_BOOTSTRAP_PHASES unset)" {
+    export TESTDATA='Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK'
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+    export BUILDKITE_PLUGIN_SECRETS_PHASES_0="command"
+    unset BUILDKITE_BOOTSTRAP_PHASES
+
+    stub buildkite-agent "secret get env : echo ${TESTDATA}"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_success
+    assert_output --partial ":closed_lock_with_key: Fetching secrets"
+    unstub buildkite-agent
+}
+
+@test "Skips fetching in the checkout container when phases is command-only" {
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+    export BUILDKITE_PLUGIN_SECRETS_PHASES_0="command"
+    export BUILDKITE_BOOTSTRAP_PHASES="plugin,environment,checkout"
+    export BUILDKITE_CONTAINER_ID="0"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_success
+    assert_output --partial "Skipping secret fetch"
+    refute_output --partial ":closed_lock_with_key: Fetching secrets"
+}
+
+@test "Fetches in the command container when phases is command-only" {
+    export TESTDATA='Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK'
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+    export BUILDKITE_PLUGIN_SECRETS_PHASES_0="command"
+    export BUILDKITE_BOOTSTRAP_PHASES="plugin,environment,command"
+    export BUILDKITE_CONTAINER_ID="1"
+
+    stub buildkite-agent "secret get env : echo ${TESTDATA}"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_success
+    assert_output --partial ":closed_lock_with_key: Fetching secrets"
+    unstub buildkite-agent
+}
+
+@test "Skips fetching in command container when phases is checkout-only" {
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+    export BUILDKITE_PLUGIN_SECRETS_PHASES_0="checkout"
+    export BUILDKITE_BOOTSTRAP_PHASES="plugin,environment,command"
+    export BUILDKITE_CONTAINER_ID="1"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_success
+    assert_output --partial "Skipping secret fetch"
+    refute_output --partial ":closed_lock_with_key: Fetching secrets"
+}
+
+@test "Fails with a clear error on an invalid phases value" {
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+    export BUILDKITE_PLUGIN_SECRETS_PHASES_0="chekout"
+    export BUILDKITE_BOOTSTRAP_PHASES="plugin,environment,checkout"
+    export BUILDKITE_CONTAINER_ID="0"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_failure
+    assert_output --partial "Invalid phases value 'chekout'"
+}
+
+@test "Fetches in both containers by default when phases is unset" {
+    export TESTDATA='Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK'
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+    export BUILDKITE_BOOTSTRAP_PHASES="plugin,environment,checkout"
+    export BUILDKITE_CONTAINER_ID="0"
+
+    stub buildkite-agent "secret get env : echo ${TESTDATA}"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_success
+    assert_output --partial ":closed_lock_with_key: Fetching secrets"
+    unstub buildkite-agent
+}
+
+@test "Runs on a classic agent even if BUILDKITE_BOOTSTRAP_PHASES is set without BUILDKITE_CONTAINER_ID" {
+    export TESTDATA='Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK'
+    export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+    export BUILDKITE_PLUGIN_SECRETS_PHASES_0="command"
+    export BUILDKITE_BOOTSTRAP_PHASES="plugin,checkout"
+    unset BUILDKITE_CONTAINER_ID
+
+    stub buildkite-agent "secret get env : echo ${TESTDATA}"
+
+    run bash -c "$PWD/hooks/environment"
+
+    assert_success
+    assert_output --partial ":closed_lock_with_key: Fetching secrets"
     unstub buildkite-agent
 }
 

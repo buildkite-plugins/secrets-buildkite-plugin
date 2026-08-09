@@ -650,6 +650,32 @@ both the checkout container and the command container in this case. Each one fet
 By default, the Buildkite Agent ships with `git` and `ssh` which are required for this plugin,if you are using a custom image, please ensure that `git`, `ssh` and if your token is base64 encoded, `base64`
 are installed.
 
+#### Limiting a plugin instance to specific phases
+
+Because the environment hook re-runs once per container, secrets that are only needed by your
+`command` step (e.g. `variables`, `env`, `json-variables`) get fetched a second time, unused, in
+the `checkout` container. Use `phases` to scope a plugin instance to the container(s) it's
+actually needed in:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.4.0:
+          provider: aws
+          phases: [command]
+          variables:
+            API_KEY: my-api-key-secret
+      - secrets#v2.4.0:
+          provider: gcp
+          phases: [checkout]
+          git-credentials: github-https-credentials
+```
+
+`phases` defaults to `[checkout, command]`, matching the plugin's current behaviour. It's only
+meaningful on Agent Stack for Kubernetes: classic agents run the environment hook once for the
+whole job, so there's nothing to gate there and the option is ignored.
+
 ## Options
 
 ### Common Options
@@ -662,6 +688,7 @@ These options apply to all providers.
 | `env` | string | - | Secret key name for fetching batch secrets (base64-encoded `KEY=value` format). |
 | `variables` | object | - | Map of `ENV_VAR_NAME: secret-path` pairs to inject as environment variables. |
 | `json-variables` | array | - | List of `{ secret-id, json-key }` objects (AWS only). Expands the JSON object at `json-key` (a jq path, default `.`) within each secret into one environment variable per key. |
+| `phases` | array | `[checkout, command]` | Which job phases this plugin instance applies to. Only relevant on [Agent Stack for Kubernetes](#agent-stack-for-kubernetes), where the environment hook re-runs once per phase container. |
 | `mute-log` | boolean | `true` | If `true` (default), the "Fetching secrets" header renders as a de-emphasized `~~~` group. Set to `false` to use the bold `---` style. |
 | `skip-redaction` | boolean | `false` | If `true`, secrets will not be automatically redacted from logs. |
 | `retry-max-attempts` | number | `5` | Maximum retry attempts for transient failures. |
