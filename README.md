@@ -256,6 +256,34 @@ steps:
 
 Each key under `variables` becomes the environment variable name, and the value is the AWS secret name or ARN to fetch.
 
+### Fetching after OIDC assume-role
+
+Secret fetch runs in the `environment` hook by default, which is too early when
+the job obtains AWS credentials in `pre-command`. Set `hook: pre-command` on
+both plugins, and list the credential plugin **before** this plugin so assume-role
+runs, then fetch:
+
+```yaml
+steps:
+  - command: ./deploy.sh
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - image: your-command-image-with-aws-cli
+      - aws-assume-role-with-web-identity#v1.7.0:
+          hook: pre-command
+          role-arn: arn:aws:iam::111111111111:role/example-role
+      - secrets#v2.5.0:
+          hook: pre-command
+          provider: aws
+          aws-region: us-east-1
+          variables:
+            API_KEY: my-api-key-secret
+```
+
+Plugin order matters: both `pre-command` hooks run in declaration order.
+
 ### Batch (Base64-Encoded)
 
 Store multiple `KEY=value` pairs in a single AWS secret, base64-encoded:
@@ -551,9 +579,11 @@ Use the `git-credentials` option to fetch git credentials from any of the
 supported providers and configure them for the agent's checkout, without storing
 them as a Kubernetes Secret or a static file on the agent.
 
-The plugin runs in the `environment` hook, which the Agent runs inside the
-checkout container before the repository is cloned. The referenced secret
-value is used as a [git credentials file
+The plugin runs in the `environment` hook by default, which the Agent runs inside the
+checkout container before the repository is cloned. `git-credentials` and
+`git-ssh-key` require `hook: environment` (and typically `phases: [checkout]`
+on Agent Stack for Kubernetes), because checkout has already happened by
+`pre-command`. The referenced secret value is used as a [git credentials file
 entry](https://git-scm.com/docs/git-credential-store#_storage_format), and the
 plugin configures git's store credential helper to use it:
 
@@ -676,6 +706,43 @@ steps:
 meaningful on Agent Stack for Kubernetes: classic agents run the environment hook once for the
 whole job, so there's nothing to gate there and the option is ignored.
 
+`phases` chooses **which container** the `environment` hook applies to. It does not move fetch
+later: command-container `environment` still runs **before** `pre-command`. If you need secrets
+after a credential plugin that runs as `pre-command` (for example
+[aws-assume-role-with-web-identity](https://github.com/buildkite-plugins/aws-assume-role-with-web-identity-buildkite-plugin)
+with `hook: pre-command`), set `hook: pre-command` on this plugin as well.
+
+`hook: pre-command` already runs only in the command container on Agent Stack for Kubernetes, so
+you do not also need `phases: [command]`. `phases` is ignored when `hook` is `pre-command`.
+
+Command images must include the provider CLI your config uses (`aws`, `gcloud`, `az`, or `op`)
+plus `jq` / `base64` as required today. Checkout images are often `buildkite/agent` and may lack
+those tools; `hook: pre-command` assumes they exist in the command image.
+
+Git auth (`git-credentials`, `git-ssh-key`) must stay on `hook: environment` (and typically
+`phases: [checkout]`), because checkout happens before `pre-command`.
+
+You can split instances when git auth is needed at checkout and other secrets are needed after
+OIDC:
+
+```yaml
+steps:
+  - command: build.sh
+    plugins:
+      - secrets#v2.5.0:
+          provider: gcp
+          phases: [checkout]
+          git-credentials: github-https-credentials
+      - aws-assume-role-with-web-identity#v1.7.0:
+          hook: pre-command
+          role-arn: arn:aws:iam::111111111111:role/example-role
+      - secrets#v2.5.0:
+          hook: pre-command
+          provider: aws
+          variables:
+            API_KEY: my-api-key-secret
+```
+
 ## Options
 
 ### Common Options
@@ -688,7 +755,8 @@ These options apply to all providers.
 | `env` | string | - | Secret key name for fetching batch secrets (base64-encoded `KEY=value` format). |
 | `variables` | object | - | Map of `ENV_VAR_NAME: secret-path` pairs to inject as environment variables. |
 | `json-variables` | array | - | List of `{ secret-id, json-key }` objects (AWS only). Expands the JSON object at `json-key` (a jq path, default `.`) within each secret into one environment variable per key. |
-| `phases` | array | `[checkout, command]` | Which job phases this plugin instance applies to. Only relevant on [Agent Stack for Kubernetes](#agent-stack-for-kubernetes), where the environment hook re-runs once per phase container. |
+| `hook` | string | `environment` | Which job lifecycle hook performs secret fetch. `environment` or `pre-command`. Use `pre-command` to fetch after a credential plugin such as [aws-assume-role-with-web-identity](https://github.com/buildkite-plugins/aws-assume-role-with-web-identity-buildkite-plugin). |
+| `phases` | array | `[checkout, command]` | Which job phases this plugin instance applies to. Only relevant on [Agent Stack for Kubernetes](#agent-stack-for-kubernetes), where the environment hook re-runs once per phase container. Does not delay fetch until `pre-command`; use `hook` for that. Ignored when `hook` is `pre-command`. |
 | `mute-log` | boolean | `true` | If `true` (default), the "Fetching secrets" header renders as a de-emphasized `~~~` group. Set to `false` to use the bold `---` style. |
 | `skip-redaction` | boolean | `false` | If `true`, secrets will not be automatically redacted from logs. |
 | `retry-max-attempts` | number | `5` | Maximum retry attempts for transient failures. |

@@ -4,6 +4,7 @@
 plugin_read_config() {
 # Defaulting to base plugin values in order to not break backwards compatibility
   export BUILDKITE_PLUGIN_SECRETS_PROVIDER="${BUILDKITE_PLUGIN_SECRETS_PROVIDER:-buildkite}"
+  export BUILDKITE_PLUGIN_SECRETS_HOOK="${BUILDKITE_PLUGIN_SECRETS_HOOK:-environment}"
   export BUILDKITE_PLUGIN_SECRETS_RETRY_MAX_ATTEMPTS="${BUILDKITE_PLUGIN_SECRETS_RETRY_MAX_ATTEMPTS:-5}"
   export BUILDKITE_PLUGIN_SECRETS_RETRY_BASE_DELAY="${BUILDKITE_PLUGIN_SECRETS_RETRY_BASE_DELAY:-2}"
   export BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION="${BUILDKITE_PLUGIN_SECRETS_SKIP_REDACTION:-false}"
@@ -121,4 +122,35 @@ fetch_secrets() {
       unknown_provider "${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
       ;;
   esac
+}
+
+# Shared entrypoint for hooks/environment and hooks/pre-command.
+# phases only filters the environment hook; pre-command already runs only in
+# the command container on Agent Stack for Kubernetes.
+run_secrets_fetch() {
+  if [[ "${BUILDKITE_PLUGIN_SECRETS_HOOK}" != "pre-command" ]]; then
+    if ! phase_applies_to_current_container; then
+      log_info "Skipping secret fetch: current phase (BUILDKITE_BOOTSTRAP_PHASES=${BUILDKITE_BOOTSTRAP_PHASES:-}) is not in the configured phases"
+      return 0
+    fi
+  fi
+
+  local log_prefix="~~~"
+  if [[ "${BUILDKITE_PLUGIN_SECRETS_MUTE_LOG:-true}" == "false" ]]; then
+    log_prefix="---"
+  fi
+  echo "${log_prefix} :closed_lock_with_key: Fetching secrets"
+
+  log_info "Using secrets provider ${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
+
+  validate_git_auth_config
+
+  # Setup provider environment
+  setup_provider_environment
+
+  # Fetch secrets from the configured provider
+  fetch_secrets
+
+  configure_git_credentials
+  configure_git_ssh
 }

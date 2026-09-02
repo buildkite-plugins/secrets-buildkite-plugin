@@ -1,16 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 
-# Default hook when `hook` is unset. Skip without loading the library so a
-# command container missing provider CLIs does not fail during environment.
-if [[ "${BUILDKITE_PLUGIN_SECRETS_HOOK:-environment}" == "environment" ]]; then
-  echo "Running in the environment hook"
+# This hook only runs if the hook parameter is set to "pre-command".
+if [[ "${BUILDKITE_PLUGIN_SECRETS_HOOK:-}" == "pre-command" ]]; then
+  echo "Running in the pre-command hook"
 else
-  echo "Skipping environment hook"
+  echo "Skipping pre-command hook"
   exit 0
 fi
 
-# Load plugin library
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # shellcheck source=../lib/plugin.bash
