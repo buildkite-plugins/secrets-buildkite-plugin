@@ -127,6 +127,17 @@ EOF
   unstub buildkite-agent
 }
 
+@test "Fails when git-ssh-key is set with hook pre-command" {
+  export BUILDKITE_PLUGIN_SECRETS_HOOK="pre-command"
+  export BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY="deploy-key"
+
+  run bash -c "$PWD/hooks/pre-command"
+
+  assert_failure
+  assert_output --partial "git-credentials and git-ssh-key require hook: environment"
+  refute_output --partial "Configured git SSH key"
+}
+
 @test "Fails when both git-credentials and git-ssh-key are set" {
   export BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS="git-creds"
   export BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY="deploy-key"

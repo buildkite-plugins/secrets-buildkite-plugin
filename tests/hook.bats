@@ -60,6 +60,28 @@ setup() {
   unstub buildkite-agent
 }
 
+@test "environment hook fails on an unrecognised hook value" {
+  export BUILDKITE_PLUGIN_SECRETS_HOOK="Pre-Command"
+  export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+
+  run "$PWD/hooks/environment"
+
+  assert_failure
+  assert_output --partial "Invalid hook 'Pre-Command'"
+  refute_output --partial ":closed_lock_with_key: Fetching secrets"
+}
+
+@test "environment hook fails on a misspelled hook value" {
+  export BUILDKITE_PLUGIN_SECRETS_HOOK="enviroment"
+  export BUILDKITE_PLUGIN_SECRETS_ENV="env"
+
+  run "$PWD/hooks/environment"
+
+  assert_failure
+  assert_output --partial "Invalid hook 'enviroment'"
+  refute_output --partial ":closed_lock_with_key: Fetching secrets"
+}
+
 @test "pre-command hook fetches in the command container even when phases is checkout-only" {
   export TESTDATA='Rk9PPWJhcgpCQVI9QmF6ClNFQ1JFVD1sbGFtYXMK'
   export BUILDKITE_PLUGIN_SECRETS_ENV="env"

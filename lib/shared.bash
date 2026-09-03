@@ -360,6 +360,12 @@ validate_git_auth_config() {
     log_error "git-credentials and git-ssh-key are mutually exclusive. Configure one git auth method per step."
     exit 1
   fi
+
+  if [[ "${BUILDKITE_PLUGIN_SECRETS_HOOK:-environment}" == "pre-command" ]] &&
+     [[ -n "${BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS:-}${BUILDKITE_PLUGIN_SECRETS_GIT_SSH_KEY:-}" ]]; then
+    log_error "git-credentials and git-ssh-key require hook: environment. Checkout happens before pre-command, so credentials configured there are never used."
+    exit 1
+  fi
 }
 
 git_credentials_file() {
