@@ -125,8 +125,8 @@ fetch_secrets() {
 }
 
 # Shared entrypoint for hooks/environment and hooks/pre-command.
-# phases only filters the environment hook; pre-command already runs only in
-# the command container on Agent Stack for Kubernetes.
+# phases only filters the environment hook; pre-command runs once per command
+# container on Agent Stack for Kubernetes.
 run_secrets_fetch() {
   if [[ "${BUILDKITE_PLUGIN_SECRETS_HOOK}" != "pre-command" ]]; then
     if ! phase_applies_to_current_container; then
