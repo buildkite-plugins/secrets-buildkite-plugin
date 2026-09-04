@@ -40,6 +40,11 @@ configuration:
         required:
           - secret-id
         additionalProperties: false
+    hook:
+      type: string
+      enum: ["environment", "pre-command"]
+      default: "environment"
+      description: "Which job lifecycle hook performs secret fetch. environment (the default) or pre-command. Use pre-command when a credential plugin such as aws-assume-role-with-web-identity must run first."
     phases:
       type: array
       items:
@@ -47,7 +52,7 @@ configuration:
         enum: ["checkout", "command"]
       minItems: 1
       default: ["checkout", "command"]
-      description: "Which job phases this plugin instance applies to. Only relevant on Agent Stack for Kubernetes, where the environment hook re-runs once per phase container; classic agents run it once for the whole job regardless of this setting. Defaults to both phases (current behavior)."
+      description: "Which job phases this plugin instance applies to. Only relevant on Agent Stack for Kubernetes, where the environment hook re-runs once per phase container; classic agents run it once for the whole job regardless of this setting. Defaults to both phases (current behavior). Ignored when hook is pre-command."
     mute-log:
       type: boolean
       default: true

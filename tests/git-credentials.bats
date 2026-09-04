@@ -52,6 +52,17 @@ teardown() {
   assert [ ! -f "$BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS_FILE" ]
 }
 
+@test "Fails when git-credentials is set with hook pre-command" {
+  export BUILDKITE_PLUGIN_SECRETS_HOOK="pre-command"
+  export BUILDKITE_PLUGIN_SECRETS_GIT_CREDENTIALS="git-creds"
+
+  run bash -c "$PWD/hooks/pre-command"
+
+  assert_failure
+  assert_output --partial "git-credentials and git-ssh-key require hook: environment"
+  refute_output --partial "Configured git 'store' credential helper"
+}
+
 @test "Fails when git is missing and git-credentials is set" {
   local tmp
   tmp=$(mktemp -d)

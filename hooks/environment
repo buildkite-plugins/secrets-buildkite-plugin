@@ -1,6 +1,24 @@
 #!/bin/bash
 set -euo pipefail
 
+# Default hook when `hook` is unset. Skip without loading the library so a
+# command container missing provider CLIs does not fail during environment.
+# Validate here (before sourcing the library) because both hooks exit on a
+# mismatch, plugin validation is off by default, and this hook always runs first.
+case "${BUILDKITE_PLUGIN_SECRETS_HOOK:-environment}" in
+  environment)
+    echo "Running in the environment hook"
+    ;;
+  pre-command)
+    echo "Skipping environment hook"
+    exit 0
+    ;;
+  *)
+    echo "[ERROR]: Invalid hook '${BUILDKITE_PLUGIN_SECRETS_HOOK}': must be 'environment' or 'pre-command'" >&2
+    exit 1
+    ;;
+esac
+
 # Load plugin library
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -13,30 +31,4 @@ else
   exit 1
 fi
 
-main() {
-  if ! phase_applies_to_current_container; then
-    log_info "Skipping secret fetch: current phase (BUILDKITE_BOOTSTRAP_PHASES=${BUILDKITE_BOOTSTRAP_PHASES:-}) is not in the configured phases"
-    return 0
-  fi
-
-  local log_prefix="~~~"
-  if [[ "${BUILDKITE_PLUGIN_SECRETS_MUTE_LOG:-true}" == "false" ]]; then
-    log_prefix="---"
-  fi
-  echo "${log_prefix} :closed_lock_with_key: Fetching secrets"
-
-  log_info "Using secrets provider ${BUILDKITE_PLUGIN_SECRETS_PROVIDER}"
-
-  validate_git_auth_config
-
-  # Setup provider environment
-  setup_provider_environment
-
-  # Fetch secrets from the configured provider
-  fetch_secrets
-
-  configure_git_credentials
-  configure_git_ssh
-}
-
-main "$@"
+run_secrets_fetch

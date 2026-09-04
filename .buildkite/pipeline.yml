@@ -9,6 +9,7 @@ steps:
       - shellcheck#v1.4.0:
           files:
             - hooks/**
+            - lib/**
 
   - label: ":shell: Tests"
     plugins:
