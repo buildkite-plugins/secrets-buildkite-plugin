@@ -14,6 +14,6 @@ steps:
 
   - label: ":shell: Tests"
     plugins:
-      - plugin-tester#v1.3.0:
+      - plugin-tester#v1.4.0:
           folders:
             - tests
